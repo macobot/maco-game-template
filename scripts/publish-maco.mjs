@@ -51,6 +51,16 @@ function metadataErrors(packageJson, remote) {
   return errors
 }
 
+function openUrl(url) {
+  const [opener, openerArgs] = process.platform === 'darwin'
+    ? ['open', [url]]
+    : process.platform === 'win32'
+      ? ['cmd', ['/c', 'start', '', url]]
+      : ['xdg-open', [url]]
+  const result = spawnSync(opener, openerArgs, { stdio: 'ignore', detached: true })
+  if (result.error || result.status !== 0) console.warn(`Không thể tự mở trình duyệt. Mở URL này sau khi workflow publish xong:\n${url}`)
+}
+
 async function initializeMetadata(errors) {
   console.error(`\n✖ Metadata chưa hợp lệ:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -104,3 +114,20 @@ command('git', ['push', 'origin', 'HEAD', tag])
 
 console.log(`\n✓ Đã phát hành ${releasedPackage.name}@${releasedPackage.version}.`)
 console.log(`✓ Đã push commit và tag ${tag}; GitHub Actions sẽ publish package private.`)
+
+const packageName = releasedPackage.name.slice(releasedPackage.name.indexOf('/') + 1)
+const packageUrl = `https://github.com/${remote.owner}/${remote.repository}/pkgs/npm/${packageName}`
+const settingsUrl = `${packageUrl}/settings`
+console.log(`Settings: ${settingsUrl}`)
+openUrl(settingsUrl)
+console.log('Trình duyệt đã được mở. Nếu package chưa xuất hiện, đợi workflow thành công rồi tải lại trang.')
+console.log('Trong Package settings: (1) bỏ chọn “Inherit access from source repository (recommended)” nếu có; (2) rồi mới mời macobot với role Read.')
+
+if (process.stdin.isTTY && process.stdout.isTTY) {
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  await prompt.question('Sau khi đã tắt inheritance và mời macobot với role Read, nhấn Enter để mở form Maco Games... ')
+  prompt.close()
+  command('node', ['scripts/handoff-maco.mjs'])
+} else {
+  console.log('Sau khi mời xong, chạy: pnpm maco:handoff')
+}
