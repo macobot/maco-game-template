@@ -17,11 +17,12 @@ pnpm build
 ## Release
 
 ```bash
-pnpm version patch
-git push origin HEAD --follow-tags
+pnpm maco:publish
 ```
 
-Tag `vX.Y.Z` kích hoạt GitHub Actions. Workflow dùng `GITHUB_TOKEN` của repository để publish package private lên GitHub Packages.
+Lệnh duy nhất này chạy dependency check, typecheck và build; sau đó tự gom mọi thay đổi chưa commit, tăng patch version, tạo release commit, tạo tag `vX.Y.Z` và push lên GitHub. Tag kích hoạt GitHub Actions; workflow dùng `GITHUB_TOKEN` của repository để publish package private lên GitHub Packages.
+
+Nếu metadata package chưa khớp với remote `origin`, lệnh sẽ hỏi có chạy `pnpm maco:init` để tự đồng bộ hay không.
 
 ## Cấp quyền cho Maco Games
 
