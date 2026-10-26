@@ -22,7 +22,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "maco:publish": "node scripts/publish-maco.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
