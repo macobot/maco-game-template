@@ -25,11 +25,12 @@ pnpm build
 ## Publish
 
 ```bash
-pnpm version patch
-git push origin HEAD --follow-tags
+pnpm maco:publish
 ```
 
-Tag `vX.Y.Z` sẽ publish package private. Sau lần publish đầu, mở package trên GitHub → **Package settings** → **Manage access** → **Invite teams or people**, rồi thêm tài khoản bot do Maco administrator cung cấp với role **Read**. Sau đó gửi package name và version cho Maco administrator để host cài package.
+Lệnh này kiểm tra dependencies/typecheck/build, gom mọi thay đổi chưa commit của game, tăng patch version, tạo release commit và tag `vX.Y.Z`, rồi push cả hai lên GitHub. Tag sẽ publish package private qua GitHub Actions.
+
+Sau lần publish đầu, mở package trên GitHub → **Package settings** → **Manage access** → **Invite teams or people**, rồi thêm tài khoản bot do Maco administrator cung cấp với role **Read**. Sau đó gửi package name và version cho Maco administrator để host cài package.
 
 Xem [hướng dẫn publish](docs/PUBLISHING.md) nếu cần thêm chi tiết.
 
