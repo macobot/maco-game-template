@@ -1,6 +1,6 @@
 {
   "name": "@macobot/maco-game-template",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Template for independently released Maco browser games.",
   "repository": {
     "type": "git",
