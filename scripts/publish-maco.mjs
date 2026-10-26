@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { createInterface } from 'node:readline/promises'
 import process from 'node:process'
 
 function fail(message) {
@@ -31,21 +32,36 @@ function getGitHubRemote() {
   return { owner: match[1], repository: match[2] }
 }
 
-function validatePackage(packageJson, remote) {
+function metadataErrors(packageJson, remote) {
+  const errors = []
   const expectedScope = remote.owner.toLowerCase()
   const nameMatch = packageJson.name?.match(/^@([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9._-]*)$/)
   if (!nameMatch || nameMatch[1] !== expectedScope) {
-    fail(`package.json:name phải bắt đầu bằng @${expectedScope}/.`)
+    errors.push(`package.json:name phải bắt đầu bằng @${expectedScope}/.`)
   }
-  if (!packageJson.description?.trim()) fail('package.json:description không được để trống.')
+  if (!packageJson.description?.trim()) errors.push('package.json:description không được để trống.')
 
   const expectedRepository = `git+https://github.com/${remote.owner}/${remote.repository}.git`
   if (packageJson.repository?.url !== expectedRepository) {
-    fail(`package.json:repository.url phải là ${expectedRepository}.`)
+    errors.push(`package.json:repository.url phải là ${expectedRepository}.`)
   }
   if (packageJson.publishConfig?.registry !== 'https://npm.pkg.github.com') {
-    fail('package.json:publishConfig.registry phải là https://npm.pkg.github.com.')
+    errors.push('package.json:publishConfig.registry phải là https://npm.pkg.github.com.')
   }
+  return errors
+}
+
+async function initializeMetadata(errors) {
+  console.error(`\n✖ Metadata chưa hợp lệ:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    fail('Chạy pnpm maco:init để đồng bộ metadata, rồi chạy lại pnpm maco:publish.')
+  }
+
+  const prompt = createInterface({ input: process.stdin, output: process.stdout })
+  const answer = (await prompt.question('Chạy pnpm maco:init để tự động cập nhật metadata? (Y/n) ')).trim().toLowerCase()
+  prompt.close()
+  if (answer === 'n' || answer === 'no') fail('Đã hủy publish.')
+  command('node', ['scripts/init-maco.mjs'])
 }
 
 const args = process.argv.slice(2).filter((argument) => argument !== '--')
@@ -54,8 +70,14 @@ if (!existsSync('package.json')) fail('Không tìm thấy package.json ở root 
 if (!existsSync('pnpm-lock.yaml')) fail('Thiếu pnpm-lock.yaml ở root repository.')
 
 const remote = getGitHubRemote()
-const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
-validatePackage(packageJson, remote)
+let packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+let errors = metadataErrors(packageJson, remote)
+if (errors.length) {
+  await initializeMetadata(errors)
+  packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+  errors = metadataErrors(packageJson, remote)
+  if (errors.length) fail(`Metadata vẫn chưa hợp lệ:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
+}
 
 const branch = output('git', ['branch', '--show-current'])
 if (!branch) fail('Không thể release từ detached HEAD.')

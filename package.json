@@ -1,13 +1,13 @@
 {
-  "name": "@lukhaiminh/maco-game-package-template",
+  "name": "@macobot/maco-game-template",
   "version": "0.1.0",
   "description": "Template for independently released Maco browser games.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lukhaiminh/maco-game-package-template.git"
+    "url": "git+https://github.com/macobot/maco-game-template.git"
   },
   "type": "module",
-  "packageManager": "pnpm@10.20.0",
+  "packageManager": "pnpm@12.15.0",
   "files": [
     "src",
     "README.md"
@@ -23,11 +23,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "maco:init": "node scripts/init-maco.mjs",
     "maco:publish": "node scripts/publish-maco.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
     "vite-plugin-singlefile": "^2.0.0"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/macobot/maco-game-template/issues"
+  },
+  "homepage": "https://github.com/macobot/maco-game-template#readme"
 }
