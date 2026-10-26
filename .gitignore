@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output and tool caches
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.log
+pnpm-debug.log*
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/

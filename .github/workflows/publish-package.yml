@@ -1,0 +1,41 @@
+name: Publish private GitHub Package
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@${{ github.repository_owner }}'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Confirm the tag matches package.json
+        run: |
+          test "${GITHUB_REF_NAME#v}" = "$(node -p 'require("./package.json").version')"
+      - name: Confirm the package scope matches the repository owner
+        run: |
+          package_name="$(node -p 'require("./package.json").name')"
+          expected_scope="@$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/"
+          case "$package_name" in
+            "$expected_scope"*) ;;
+            *)
+              echo "package.json name must start with $expected_scope (received: $package_name)"
+              exit 1
+              ;;
+          esac
+      - run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
