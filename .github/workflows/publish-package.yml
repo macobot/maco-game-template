@@ -1,8 +1,8 @@
-name: Publish private GitHub Package
+name: Publish public GitHub Package
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', '*/v*']
 
 permissions:
   contents: read
@@ -12,20 +12,49 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - name: Resolve package from the release tag
+        id: package
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?)$ ]]; then
+            echo 'dir=.' >> "$GITHUB_OUTPUT"
+            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$tag" =~ ^([a-z0-9][a-z0-9-]*)/v([0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?)$ ]]; then
+            slug="${BASH_REMATCH[1]}"
+            if [[ ! -f "games/$slug/package.json" ]]; then
+              echo "Tag $tag names no game: games/$slug/package.json does not exist"
+              exit 1
+            fi
+            echo "dir=games/$slug" >> "$GITHUB_OUTPUT"
+            echo "version=${tag#*/v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Tag $tag must be v<version> or <slug>/v<version>"
+          exit 1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           registry-url: https://npm.pkg.github.com
           scope: '@${{ github.repository_owner }}'
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm build
-      - name: Confirm the tag matches package.json
+      - name: Check the package
+        working-directory: ${{ steps.package.outputs.dir }}
         run: |
-          test "${GITHUB_REF_NAME#v}" = "$(node -p 'require("./package.json").version')"
+          pnpm typecheck
+          pnpm build
+      - name: Confirm the tag matches package.json
+        working-directory: ${{ steps.package.outputs.dir }}
+        env:
+          TAG_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          test "$TAG_VERSION" = "$(node -p 'require("./package.json").version')"
       - name: Confirm the package scope matches the repository owner
+        working-directory: ${{ steps.package.outputs.dir }}
         run: |
           package_name="$(node -p 'require("./package.json").name')"
           expected_scope="@$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/"
@@ -36,6 +65,8 @@ jobs:
               exit 1
               ;;
           esac
-      - run: pnpm publish --no-git-checks
+      - name: Publish
+        working-directory: ${{ steps.package.outputs.dir }}
+        run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

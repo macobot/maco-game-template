@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { createInterface } from 'node:readline/promises'
 import process from 'node:process'
+
+const BUMPS = new Set(['patch', 'minor', 'major'])
 
 function fail(message) {
   console.error(`\n✖ ${message}`)
@@ -32,7 +34,35 @@ function getGitHubRemote() {
   return { owner: match[1], repository: match[2] }
 }
 
-function metadataErrors(packageJson, remote) {
+function parseArgs() {
+  const flags = new Set()
+  const positionals = []
+  let slug
+
+  for (const argument of process.argv.slice(2)) {
+    if (argument === '--') continue
+    if (argument === '--dry-run') {
+      flags.add(argument)
+      continue
+    }
+    if (argument.startsWith('--')) {
+      const requestedSlug = argument.slice(2)
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(requestedSlug) || slug) {
+        fail('Cú pháp: pnpm maco:publish [--<game-slug>] [patch|minor|major] [--dry-run]')
+      }
+      slug = requestedSlug
+      continue
+    }
+    positionals.push(argument)
+  }
+
+  if (positionals.length > 1 || (positionals[0] && !BUMPS.has(positionals[0]))) {
+    fail('Cú pháp: pnpm maco:publish [--<game-slug>] [patch|minor|major] [--dry-run]')
+  }
+  return { slug, bump: positionals[0] ?? 'patch', dryRun: flags.has('--dry-run') }
+}
+
+function metadataErrors(packageJson, remote, slug) {
   const errors = []
   const expectedScope = remote.owner.toLowerCase()
   const nameMatch = packageJson.name?.match(/^@([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9._-]*)$/)
@@ -48,86 +78,69 @@ function metadataErrors(packageJson, remote) {
   if (packageJson.publishConfig?.registry !== 'https://npm.pkg.github.com') {
     errors.push('package.json:publishConfig.registry phải là https://npm.pkg.github.com.')
   }
+  if (slug && packageJson.repository?.directory !== `games/${slug}`) {
+    errors.push(`package.json:repository.directory phải là games/${slug}.`)
+  }
   return errors
 }
 
-function openUrl(url) {
-  const [opener, openerArgs] = process.platform === 'darwin'
-    ? ['open', [url]]
-    : process.platform === 'win32'
-      ? ['cmd', ['/c', 'start', '', url]]
-      : ['xdg-open', [url]]
-  const result = spawnSync(opener, openerArgs, { stdio: 'ignore', detached: true })
-  if (result.error || result.status !== 0) console.warn(`Không thể tự mở trình duyệt. Mở URL này sau khi workflow publish xong:\n${url}`)
-}
-
-async function initializeMetadata(errors) {
+function initializeMetadata(errors, slug) {
   console.error(`\n✖ Metadata chưa hợp lệ:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    fail('Chạy pnpm maco:init để đồng bộ metadata, rồi chạy lại pnpm maco:publish.')
-  }
-
-  const prompt = createInterface({ input: process.stdin, output: process.stdout })
-  const answer = (await prompt.question('Chạy pnpm maco:init để tự động cập nhật metadata? (Y/n) ')).trim().toLowerCase()
-  prompt.close()
-  if (answer === 'n' || answer === 'no') fail('Đã hủy publish.')
-  command('node', ['scripts/init-maco.mjs'])
+  const commandSuffix = slug ? ` --${slug}` : ''
+  fail(`Chạy pnpm maco:init${commandSuffix} để đồng bộ metadata, commit thay đổi, rồi chạy lại pnpm maco:publish${commandSuffix}.`)
 }
 
-const args = process.argv.slice(2).filter((argument) => argument !== '--')
-if (args.length) fail('Cú pháp: pnpm maco:publish')
-if (!existsSync('package.json')) fail('Không tìm thấy package.json ở root repository.')
+const { slug, bump, dryRun } = parseArgs()
+const packageDir = slug ? resolve('games', slug) : process.cwd()
+const packagePath = resolve(packageDir, 'package.json')
+if (!existsSync(packagePath)) {
+  fail(slug ? `Không tìm thấy games/${slug}/package.json.` : 'Không tìm thấy package.json ở root repository.')
+}
 if (!existsSync('pnpm-lock.yaml')) fail('Thiếu pnpm-lock.yaml ở root repository.')
 
 const remote = getGitHubRemote()
-let packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
-let errors = metadataErrors(packageJson, remote)
+let packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
+let errors = metadataErrors(packageJson, remote, slug)
 if (errors.length) {
-  await initializeMetadata(errors)
-  packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
-  errors = metadataErrors(packageJson, remote)
-  if (errors.length) fail(`Metadata vẫn chưa hợp lệ:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
+  initializeMetadata(errors, slug)
+}
+
+if (dryRun) {
+  console.log(`✓ Dry run hợp lệ. Sẽ tạo tag ${slug ? `${slug}/` : ''}v<next-version> và GitHub Actions sẽ tự publish public package.`)
+  process.exit(0)
 }
 
 const branch = output('git', ['branch', '--show-current'])
 if (!branch) fail('Không thể release từ detached HEAD.')
+if (output('git', ['status', '--porcelain'])) {
+  fail('Working tree phải sạch trước khi release. Hãy commit hoặc stash thay đổi, rồi chạy lại.')
+}
 if (!output('git', ['config', '--get', 'user.name']) || !output('git', ['config', '--get', 'user.email'])) {
   fail('Cần cấu hình git user.name và user.email trước khi tạo release commit.')
 }
 
 console.log(`\n→ Kiểm tra ${packageJson.name} trên nhánh ${branch}...`)
 command('pnpm', ['install', '--frozen-lockfile'])
-command('pnpm', ['typecheck'])
-command('pnpm', ['build'])
+command('pnpm', ['typecheck'], { cwd: packageDir })
+command('pnpm', ['build'], { cwd: packageDir })
 
-command('pnpm', ['version', 'patch', '--no-git-tag-version'])
-const releasedPackage = JSON.parse(readFileSync('package.json', 'utf8'))
-const tag = `v${releasedPackage.version}`
-if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag)) {
+command('pnpm', ['version', bump, '--no-git-tag-version'], { cwd: packageDir })
+const releasedPackage = JSON.parse(readFileSync(packagePath, 'utf8'))
+const tag = `${slug ? `${slug}/` : ''}v${releasedPackage.version}`
+if (!/^(?:[a-z0-9-]+\/)?v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag)) {
   fail(`Version không hợp lệ sau khi bump: ${releasedPackage.version}`)
 }
 
-command('git', ['add', '--all'])
-command('git', ['commit', '-m', `chore: release ${tag}`])
+const stagedFiles = slug ? [`games/${slug}/package.json`, 'pnpm-lock.yaml'] : ['package.json', 'pnpm-lock.yaml']
+command('git', ['add', '--', ...stagedFiles])
+command('git', ['commit', '-m', slug ? `chore(${slug}): release v${releasedPackage.version}` : `chore: release ${tag}`])
 command('git', ['tag', '-a', tag, '-m', tag])
 command('git', ['push', 'origin', 'HEAD', tag])
 
 console.log(`\n✓ Đã phát hành ${releasedPackage.name}@${releasedPackage.version}.`)
-console.log(`✓ Đã push commit và tag ${tag}; GitHub Actions sẽ publish package private.`)
+console.log(`✓ Đã push commit và tag ${tag}; GitHub Actions sẽ tự publish public package.`)
 
 const packageName = releasedPackage.name.slice(releasedPackage.name.indexOf('/') + 1)
 const packageUrl = `https://github.com/${remote.owner}/${remote.repository}/pkgs/npm/${packageName}`
-const settingsUrl = `${packageUrl}/settings`
-console.log(`Settings: ${settingsUrl}`)
-openUrl(settingsUrl)
-console.log('Trình duyệt đã được mở. Nếu package chưa xuất hiện, đợi workflow thành công rồi tải lại trang.')
-console.log('Trong Package settings: (1) bỏ chọn “Inherit access from source repository (recommended)” nếu có; (2) rồi mới mời macobot với role Read.')
-
-if (process.stdin.isTTY && process.stdout.isTTY) {
-  const prompt = createInterface({ input: process.stdin, output: process.stdout })
-  await prompt.question('Sau khi đã tắt inheritance và mời macobot với role Read, nhấn Enter để mở form Maco Games... ')
-  prompt.close()
-  command('node', ['scripts/handoff-maco.mjs'])
-} else {
-  console.log('Sau khi mời xong, chạy: pnpm maco:handoff')
-}
+console.log(`Package URL: ${packageUrl}`)
+console.log('Không cần tạo package, mở Package settings hay mời bot trên GitHub: workflow sẽ tạo/cập nhật package từ tag.')

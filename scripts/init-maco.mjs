@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 
@@ -19,12 +20,18 @@ function getGitHubRemote() {
 }
 
 const args = process.argv.slice(2).filter((argument) => argument !== '--')
-if (args.length) fail('Cú pháp: pnpm maco:init')
-if (!existsSync('package.json')) fail('Không tìm thấy package.json ở root repository.')
+if (args.length > 1 || (args[0] && !/^--[a-z0-9][a-z0-9-]*$/.test(args[0]))) {
+  fail('Cú pháp: pnpm maco:init [--<game-slug>]')
+}
+const slug = args[0]?.slice(2)
+const packagePath = slug ? resolve('games', slug, 'package.json') : 'package.json'
+if (!existsSync(packagePath)) {
+  fail(slug ? `Không tìm thấy games/${slug}/package.json.` : 'Không tìm thấy package.json ở root repository.')
+}
 
 const remote = getGitHubRemote()
-const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
-const packageSlug = remote.repository.toLowerCase()
+const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
+const packageSlug = slug ?? remote.repository.toLowerCase()
 if (!/^[a-z0-9][a-z0-9._-]*$/.test(packageSlug)) {
   fail(`Tên repository ${remote.repository} không thể dùng làm package name.`)
 }
@@ -33,11 +40,13 @@ const repositoryUrl = `git+https://github.com/${remote.owner}/${remote.repositor
 const nextPackage = {
   ...packageJson,
   name: `@${remote.owner.toLowerCase()}/${packageSlug}`,
-  repository: { type: 'git', url: repositoryUrl },
+  repository: slug
+    ? { type: 'git', url: repositoryUrl, directory: `games/${slug}` }
+    : { type: 'git', url: repositoryUrl },
   bugs: { url: `https://github.com/${remote.owner}/${remote.repository}/issues` },
   homepage: `https://github.com/${remote.owner}/${remote.repository}#readme`,
   publishConfig: { ...packageJson.publishConfig, registry: 'https://npm.pkg.github.com' },
 }
 
-writeFileSync('package.json', `${JSON.stringify(nextPackage, null, 2)}\n`)
+writeFileSync(packagePath, `${JSON.stringify(nextPackage, null, 2)}\n`)
 console.log(`\n✓ Đã đồng bộ metadata cho ${nextPackage.name}`)
