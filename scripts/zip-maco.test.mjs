@@ -79,6 +79,21 @@ describe('collectArtifactFiles', () => {
     await expect(collectArtifactFiles(dist)).rejects.toThrow('disallowed extension')
   })
 
+  it.each(['a%20b.js', 'a?b.js', 'c#d.js'])('fails on the URL-unsafe name %s', async (name) => {
+    await put('index.html')
+    await put(name)
+    await expect(collectArtifactFiles(dist)).rejects.toThrow('contains %, ? or #')
+  })
+
+  it('accepts a 512-byte path and refuses a 513-byte one', async () => {
+    await put('index.html')
+    const folders = `${'d'.repeat(200)}/${'e'.repeat(200)}`
+    await put(`${folders}/${'a'.repeat(107)}.js`)
+    await expect(collectArtifactFiles(dist)).resolves.toBeTruthy()
+    await put(`${folders}/${'b'.repeat(108)}.js`)
+    await expect(collectArtifactFiles(dist)).rejects.toThrow('longer than 512 bytes')
+  })
+
   it('leaves Finder .DS_Store files out of the zip', async () => {
     await put('index.html')
     await put('.DS_Store')

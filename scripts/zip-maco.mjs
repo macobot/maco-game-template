@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Packs `dist/` into `maco-upload/<key>-<version>.zip` for the upload form at
 // https://macogame.com/developer/game-submissions, failing locally on every rule the server enforces.
+import { Buffer } from 'node:buffer'
 import { createWriteStream } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
@@ -15,6 +16,7 @@ import yazl from 'yazl'
 export const MAX_ZIP_BYTES = 52_428_800
 export const MAX_UNCOMPRESSED_BYTES = 157_286_400
 export const MAX_FILES = 1000
+export const MAX_PATH_BYTES = 512
 
 export const ARTIFACT_EXTENSIONS = [
   'html', 'htm', 'js', 'mjs', 'css', 'json', 'map', 'wasm', 'txt', 'xml', 'csv',
@@ -105,6 +107,13 @@ export async function collectArtifactFiles(distDir) {
       }
       if (name.includes('\\')) {
         throw new ArtifactCheckError(`${zipPath} contains a backslash; rename it`)
+      }
+      // Browsers treat these as URL syntax, so a file named with them could never be fetched.
+      if (/[%?#]/.test(name)) {
+        throw new ArtifactCheckError(`${zipPath} contains %, ? or #; rename it`)
+      }
+      if (Buffer.byteLength(zipPath, 'utf8') > MAX_PATH_BYTES) {
+        throw new ArtifactCheckError(`${zipPath} is longer than ${MAX_PATH_BYTES} bytes; shorten it`)
       }
       if (entryStat.isDirectory()) {
         await walk(absolutePath, zipPath)
