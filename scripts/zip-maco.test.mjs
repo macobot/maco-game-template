@@ -73,10 +73,18 @@ describe('collectArtifactFiles', () => {
     await expect(collectArtifactFiles(dist)).rejects.toThrow('no index.html at its root')
   })
 
-  it.each(['evil.exe', 'bundle.js.br', 'bundle.js.gz', '.DS_Store', 'LICENSE'])('fails on the disallowed file %s', async (name) => {
+  it.each(['evil.exe', 'bundle.js.br', 'bundle.js.gz', 'notes.DS_Store', 'LICENSE'])('fails on the disallowed file %s', async (name) => {
     await put('index.html')
     await put(name)
     await expect(collectArtifactFiles(dist)).rejects.toThrow('disallowed extension')
+  })
+
+  it('leaves Finder .DS_Store files out of the zip', async () => {
+    await put('index.html')
+    await put('.DS_Store')
+    await put('assets/.DS_Store')
+    const { files } = await collectArtifactFiles(dist)
+    expect(files.map(file => file.path)).toEqual(['index.html'])
   })
 
   it('fails on a symlink', async () => {

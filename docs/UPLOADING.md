@@ -40,7 +40,7 @@ mp3 ogg oga wav m4a aac opus mp4 webm
 ttf otf woff woff2 glb gltf bin data unityweb pck atlas fnt
 ```
 
-File nén sẵn `.br` và `.gz` **không** được phép, vì máy chủ phục vụ game không gắn được `Content-Encoding`. File không có đuôi (ví dụ `LICENSE`) hoặc file ẩn (ví dụ `.DS_Store`) cũng bị từ chối.
+File nén sẵn `.br` và `.gz` **không** được phép, vì máy chủ phục vụ game không gắn được `Content-Encoding`. File không có đuôi (ví dụ `LICENSE`) cũng bị từ chối. Riêng `.DS_Store` và thư mục `__MACOSX/` do macOS tạo ra thì không sao: `pnpm maco:zip` tự bỏ chúng ra, và máy chủ cũng bỏ qua nếu chúng có trong file zip.
 
 ## Game key
 

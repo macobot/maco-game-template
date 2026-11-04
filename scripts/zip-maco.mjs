@@ -113,6 +113,10 @@ export async function collectArtifactFiles(distDir) {
       if (!entryStat.isFile()) {
         throw new ArtifactCheckError(`${zipPath} is not a regular file`)
       }
+      // Finder drops .DS_Store into folders it opens; the Maco server ignores it, so leave it out of the zip.
+      if (name === '.DS_Store') {
+        continue
+      }
       const extension = extensionOf(name)
       if (!ARTIFACT_EXTENSIONS.includes(extension)) {
         throw new ArtifactCheckError(`${zipPath} has a disallowed extension "${extension || '(none)'}"; allowed: ${ARTIFACT_EXTENSIONS.join(' ')}`)
