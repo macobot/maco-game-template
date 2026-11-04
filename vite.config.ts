@@ -1,12 +1,14 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
-import { viteSingleFile } from 'vite-plugin-singlefile'
 
-// A standalone build stays portable: one HTML file with all game assets inlined.
+// A normal multi-file build. `base: './'` keeps every asset URL relative, because Maco serves the
+// upload from a versioned path (`<key>/<version>/index.html`), never from the origin root.
 export default defineConfig({
-  plugins: [viteSingleFile()],
+  base: './',
   build: {
     target: 'es2019',
-    cssCodeSplit: false,
-    assetsInlineLimit: 100_000_000,
+  },
+  test: {
+    environment: 'happy-dom',
   },
 })
