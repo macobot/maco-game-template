@@ -9,25 +9,33 @@
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "files": [
+    "bin",
+    "scripts",
     "src",
     "README.md"
   ],
+  "bin": {
+    "maco": "./bin/maco.mjs"
+  },
   "exports": {
     ".": "./src/main.ts"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "maco:init": "node scripts/init-maco.mjs",
-    "maco:handoff": "node scripts/handoff-maco.mjs",
-    "maco:publish": "node scripts/publish-maco.mjs"
+    "lint": "npm run typecheck",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run build",
+    "publish": "npm run lint && npm run test && npm run prepack && changelogen --release && npm publish --access public --ignore-scripts"
   },
   "devDependencies": {
+    "changelogen": "^0.6.2",
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
     "vite-plugin-singlefile": "^2.0.0"

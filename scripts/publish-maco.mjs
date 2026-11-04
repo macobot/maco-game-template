@@ -48,7 +48,7 @@ function parseArgs() {
     if (argument.startsWith('--')) {
       const requestedSlug = argument.slice(2)
       if (!/^[a-z0-9][a-z0-9-]*$/.test(requestedSlug) || slug) {
-        fail('Cú pháp: pnpm maco:publish [--<game-slug>] [patch|minor|major] [--dry-run]')
+        fail('Cú pháp: maco publish [--<game-slug>] [patch|minor|major] [--dry-run]')
       }
       slug = requestedSlug
       continue
@@ -57,17 +57,16 @@ function parseArgs() {
   }
 
   if (positionals.length > 1 || (positionals[0] && !BUMPS.has(positionals[0]))) {
-    fail('Cú pháp: pnpm maco:publish [--<game-slug>] [patch|minor|major] [--dry-run]')
+    fail('Cú pháp: maco publish [--<game-slug>] [patch|minor|major] [--dry-run]')
   }
   return { slug, bump: positionals[0] ?? 'patch', dryRun: flags.has('--dry-run') }
 }
 
 function metadataErrors(packageJson, remote, slug) {
   const errors = []
-  const expectedScope = remote.owner.toLowerCase()
   const nameMatch = packageJson.name?.match(/^@([a-z0-9][a-z0-9-]*)\/([a-z0-9][a-z0-9._-]*)$/)
-  if (!nameMatch || nameMatch[1] !== expectedScope) {
-    errors.push(`package.json:name phải bắt đầu bằng @${expectedScope}/.`)
+  if (!nameMatch) {
+    errors.push('package.json:name phải là npm scoped package, ví dụ @macobot/my-game.')
   }
   if (!packageJson.description?.trim()) errors.push('package.json:description không được để trống.')
 
@@ -75,8 +74,8 @@ function metadataErrors(packageJson, remote, slug) {
   if (packageJson.repository?.url !== expectedRepository) {
     errors.push(`package.json:repository.url phải là ${expectedRepository}.`)
   }
-  if (packageJson.publishConfig?.registry !== 'https://npm.pkg.github.com') {
-    errors.push('package.json:publishConfig.registry phải là https://npm.pkg.github.com.')
+  if (packageJson.publishConfig?.registry !== 'https://registry.npmjs.org/' || packageJson.publishConfig?.access !== 'public') {
+    errors.push('package.json:publishConfig phải dùng npmjs registry và access public.')
   }
   if (slug && packageJson.repository?.directory !== `games/${slug}`) {
     errors.push(`package.json:repository.directory phải là games/${slug}.`)
@@ -87,7 +86,7 @@ function metadataErrors(packageJson, remote, slug) {
 function initializeMetadata(errors, slug) {
   console.error(`\n✖ Metadata chưa hợp lệ:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
   const commandSuffix = slug ? ` --${slug}` : ''
-  fail(`Chạy pnpm maco:init${commandSuffix} để đồng bộ metadata, commit thay đổi, rồi chạy lại pnpm maco:publish${commandSuffix}.`)
+  fail(`Chạy maco init${commandSuffix} để đồng bộ metadata, commit thay đổi, rồi chạy lại maco publish${commandSuffix}.`)
 }
 
 const { slug, bump, dryRun } = parseArgs()
@@ -106,7 +105,7 @@ if (errors.length) {
 }
 
 if (dryRun) {
-  console.log(`✓ Dry run hợp lệ. Sẽ tạo tag ${slug ? `${slug}/` : ''}v<next-version> và GitHub Actions sẽ tự publish public package.`)
+  console.log(`✓ Dry run hợp lệ. Sẽ publish npm package và tạo tag ${slug ? `${slug}/` : ''}v<next-version>.`)
   process.exit(0)
 }
 
@@ -131,6 +130,9 @@ if (!/^(?:[a-z0-9-]+\/)?v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$
   fail(`Version không hợp lệ sau khi bump: ${releasedPackage.version}`)
 }
 
+console.log(`→ Publish ${releasedPackage.name}@${releasedPackage.version} lên npmjs...`)
+command('pnpm', ['publish', '--access', 'public', '--no-git-checks', '--ignore-scripts'], { cwd: packageDir })
+
 const stagedFiles = slug ? [`games/${slug}/package.json`, 'pnpm-lock.yaml'] : ['package.json', 'pnpm-lock.yaml']
 command('git', ['add', '--', ...stagedFiles])
 command('git', ['commit', '-m', slug ? `chore(${slug}): release v${releasedPackage.version}` : `chore: release ${tag}`])
@@ -138,9 +140,8 @@ command('git', ['tag', '-a', tag, '-m', tag])
 command('git', ['push', 'origin', 'HEAD', tag])
 
 console.log(`\n✓ Đã phát hành ${releasedPackage.name}@${releasedPackage.version}.`)
-console.log(`✓ Đã push commit và tag ${tag}; GitHub Actions sẽ tự publish public package.`)
+console.log(`✓ Đã publish npm package và push commit/tag ${tag}.`)
 
-const packageName = releasedPackage.name.slice(releasedPackage.name.indexOf('/') + 1)
-const packageUrl = `https://github.com/${remote.owner}/${remote.repository}/pkgs/npm/${packageName}`
+const packageUrl = `https://www.npmjs.com/package/${releasedPackage.name}`
 console.log(`Package URL: ${packageUrl}`)
-console.log('Không cần tạo package, mở Package settings hay mời bot trên GitHub: workflow sẽ tạo/cập nhật package từ tag.')
+console.log('Không cần tạo package hay cấu hình GitHub Packages.')

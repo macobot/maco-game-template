@@ -1,4 +1,4 @@
-name: Publish public GitHub Package
+name: Verify release tag
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
@@ -38,8 +37,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          registry-url: https://npm.pkg.github.com
-          scope: '@${{ github.repository_owner }}'
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - name: Check the package
@@ -53,20 +50,8 @@ jobs:
           TAG_VERSION: ${{ steps.package.outputs.version }}
         run: |
           test "$TAG_VERSION" = "$(node -p 'require("./package.json").version')"
-      - name: Confirm the package scope matches the repository owner
+      - name: Confirm the package uses public npm metadata
         working-directory: ${{ steps.package.outputs.dir }}
         run: |
-          package_name="$(node -p 'require("./package.json").name')"
-          expected_scope="@$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/"
-          case "$package_name" in
-            "$expected_scope"*) ;;
-            *)
-              echo "package.json name must start with $expected_scope (received: $package_name)"
-              exit 1
-              ;;
-          esac
-      - name: Publish
-        working-directory: ${{ steps.package.outputs.dir }}
-        run: pnpm publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          test "$(node -p 'require("./package.json").publishConfig?.registry')" = 'https://registry.npmjs.org/'
+          test "$(node -p 'require("./package.json").publishConfig?.access')" = 'public'

@@ -21,7 +21,7 @@ function getGitHubRemote() {
 
 const args = process.argv.slice(2).filter((argument) => argument !== '--')
 if (args.length > 1 || (args[0] && !/^--[a-z0-9][a-z0-9-]*$/.test(args[0]))) {
-  fail('Cú pháp: pnpm maco:init [--<game-slug>]')
+  fail('Cú pháp: maco init [--<game-slug>]')
 }
 const slug = args[0]?.slice(2)
 const packagePath = slug ? resolve('games', slug, 'package.json') : 'package.json'
@@ -45,7 +45,11 @@ const nextPackage = {
     : { type: 'git', url: repositoryUrl },
   bugs: { url: `https://github.com/${remote.owner}/${remote.repository}/issues` },
   homepage: `https://github.com/${remote.owner}/${remote.repository}#readme`,
-  publishConfig: { ...packageJson.publishConfig, registry: 'https://npm.pkg.github.com' },
+  publishConfig: {
+    ...packageJson.publishConfig,
+    access: 'public',
+    registry: 'https://registry.npmjs.org/',
+  },
 }
 
 writeFileSync(packagePath, `${JSON.stringify(nextPackage, null, 2)}\n`)
