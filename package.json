@@ -25,12 +25,14 @@
     "typecheck": "tsc --noEmit",
     "maco:init": "node scripts/init-maco.mjs",
     "maco:handoff": "node scripts/handoff-maco.mjs",
-    "maco:publish": "node scripts/publish-maco.mjs"
+    "maco:publish": "node scripts/publish-maco.mjs",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "happy-dom": "21.0.4",
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
-    "vite-plugin-singlefile": "^2.0.0"
+    "vitest": "3.2.7"
   },
   "bugs": {
     "url": "https://github.com/macobot/maco-game-template/issues"
