@@ -1,10 +1,28 @@
 {
-  "name": "@macobot/maco-game-template",
+  "name": "@macobot/maco-cli",
   "version": "0.2.0",
-  "publishConfig": {
-    "access": "public"
+  "description": "CLI for validating and packaging Maco iframe game upload kits.",
+  "keywords": [
+    "maco",
+    "maco-games",
+    "game",
+    "cli",
+    "iframe"
+  ],
+  "bin": {
+    "maco": "./bin/maco.mjs"
   },
-  "description": "Template for Maco browser games shipped as iframe upload kits.",
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/macobot/maco-game-template.git"
@@ -20,9 +38,14 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src scripts",
-    "maco:validate": "node scripts/zip-maco.mjs --validate",
-    "maco:zip": "node scripts/zip-maco.mjs",
-    "maco:publish": "pnpm typecheck && pnpm test && pnpm build && pnpm maco:zip"
+    "maco:validate": "maco validate",
+    "maco:zip": "maco zip",
+    "maco:publish": "maco publish",
+    "cli:lint": "node --check bin/maco.mjs",
+    "cli:test": "node --test test/cli.test.mjs",
+    "verify": "pnpm typecheck && pnpm test && pnpm cli:lint && pnpm cli:test",
+    "prepack": "pnpm verify",
+    "publish:cli": "pnpm verify && npm publish --access public"
   },
   "devDependencies": {
     "happy-dom": "21.0.4",
@@ -36,5 +59,6 @@
   "bugs": {
     "url": "https://github.com/macobot/maco-game-template/issues"
   },
-  "homepage": "https://github.com/macobot/maco-game-template#readme"
+  "homepage": "https://github.com/macobot/maco-game-template#readme",
+  "license": "UNLICENSED"
 }

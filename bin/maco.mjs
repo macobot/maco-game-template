@@ -16,6 +16,11 @@ function command(name, args) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
+function runProjectScript(name) {
+  const usesNpm = process.env.npm_config_user_agent?.startsWith('npm/')
+  command(usesNpm ? 'npm' : 'pnpm', usesNpm ? ['run', name] : [name])
+}
+
 function zipScript() {
   const script = path.resolve('scripts/zip-maco.mjs')
   if (!existsSync(script)) fail('Không tìm thấy scripts/zip-maco.mjs. Dùng Maco upload template hoặc thêm zip script vào project.')
@@ -51,8 +56,8 @@ if (action === 'setup') setup()
 if (action === 'validate') command(process.execPath, [zipScript(), '--validate'])
 if (action === 'zip') command(process.execPath, [zipScript()])
 if (action === 'publish') {
-  command('pnpm', ['typecheck'])
-  command('pnpm', ['test'])
-  command('pnpm', ['build'])
+  runProjectScript('typecheck')
+  runProjectScript('test')
+  runProjectScript('build')
   command(process.execPath, [zipScript()])
 }

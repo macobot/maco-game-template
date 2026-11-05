@@ -1,4 +1,34 @@
-# Maco Game Template
+# @macobot/maco-cli
+
+CLI để kiểm tra và đóng gói Maco iframe game upload kit. Nó không tự upload game hay publish game package.
+
+## Cài đặt và dùng trong project game
+
+Trong thư mục gốc project game (nơi có `package.json`), cài CLI rồi đăng ký các scripts một lần:
+
+```bash
+pnpm i -D @macobot/maco-cli
+pnpm exec maco setup
+pnpm maco:publish
+```
+
+`maco setup` thêm các script sau vào `package.json` mà không ghi đè script `maco:*` có giá trị khác:
+
+```json
+{
+  "scripts": {
+    "maco:validate": "maco validate",
+    "maco:zip": "maco zip",
+    "maco:publish": "maco publish"
+  }
+}
+```
+
+Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck`, `test`, `build`, rồi tạo ZIP; project cần có `scripts/zip-maco.mjs` (có sẵn trong template bên dưới).
+
+Với npm, dùng `npm i -D @macobot/maco-cli`, `npx maco setup`, và `npm run maco:publish`.
+
+## Maco Game Template
 
 Template để làm một web game và đưa lên [Maco](https://macogame.com) dưới dạng **bản build chạy trong iframe**:
 
@@ -8,7 +38,7 @@ Template để làm một web game và đưa lên [Maco](https://macogame.com) d
 
 Bridge `maco-game/v1` đã có sẵn, nên Maco nhận ra game đã sẵn sàng và truyền ngôn ngữ của người chơi vào game.
 
-> Luồng cũ (publish npm package lên GitHub Packages, `maco:publish`) đã đóng. Maco không còn nhận package; hãy dùng zip như bên dưới.
+> Maco không nhận game qua npm package. `maco:publish` chỉ kiểm tra, build và tạo ZIP để upload như bên dưới.
 
 ## Bắt đầu
 
@@ -48,17 +78,15 @@ Mỗi version là bất biến: muốn sửa, tăng `version` trong `package.jso
 
 Chi tiết về giới hạn, đuôi file được phép, version và ghi chú cho từng engine: [docs/UPLOADING.md](docs/UPLOADING.md). Hướng dẫn đầy đủ trên Maco: [Cách đưa game lên Maco](https://macogame.com/huong-dan/dua-game-len-maco).
 
-## CLI npm tùy chọn
+## Phát hành CLI (maintainers)
 
-Template này là **private upload kit**, không publish game package. Khi muốn dùng CLI công khai ở một project khác, cài `@macobot/maco-cli`, rồi đăng ký script một lần:
+Package npm được phát hành từ root repository. Trước khi phát hành, đăng nhập npm và chạy:
 
 ```bash
-pnpm add -D @macobot/maco-cli
-pnpm exec maco setup
-pnpm maco:publish
+pnpm run publish:cli
 ```
 
-`maco:publish` chạy typecheck, test, build và tạo ZIP sẵn sàng upload; nó không tự upload hay publish package npm. CLI cũng có `pnpm maco:validate` và `pnpm maco:zip`.
+Lệnh này chạy kiểm tra kiểu, test game template, test CLI và `npm publish --access public`.
 
 ## Engine khác (Unity, Godot, HTML thuần)
 
