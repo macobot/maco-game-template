@@ -3,7 +3,7 @@ import type { Plugin } from 'vite'
 import { readFileSync } from 'node:fs'
 import javascriptObfuscator from 'javascript-obfuscator'
 import obfuscator from 'rollup-plugin-obfuscator'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
 interface MacoPackageJson {
   maco?: {
@@ -66,13 +66,36 @@ function requoteVitePlaceholders(code: string): string {
 
 // A normal multi-file build. `base: './'` keeps every asset URL relative, because Maco serves the
 // upload from a versioned path (`<key>/<version>/index.html`), never from the origin root.
-export default defineConfig({
-  base: './',
-  plugins: [packageJson.maco?.obfuscate === true ? obfuscatorPlugin() : null],
-  build: {
-    target: 'es2019',
-  },
-  test: {
-    environment: 'happy-dom',
-  },
+function macoGameOrigin(value: string | undefined): string {
+  const fallback = 'https://macogame.com'
+  if (!value) return fallback
+
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('unsupported protocol')
+    if (url.pathname !== '/' || url.search || url.hash) throw new Error('must be an origin')
+    return url.origin
+  } catch {
+    throw new Error('MACOGAME_DOMAIN must be an HTTP(S) origin, for example https://macogame.com')
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  // Load without Vite's VITE_ prefix: this value configures the bridge at build time and is not a general-purpose
+  // browser environment variable. `.env` can therefore keep the concise MACOGAME_DOMAIN name.
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
+    base: './',
+    define: {
+      __MACOGAME_DOMAIN__: JSON.stringify(macoGameOrigin(env.MACOGAME_DOMAIN)),
+    },
+    plugins: [packageJson.maco?.obfuscate === true ? obfuscatorPlugin() : null],
+    build: {
+      target: 'es2019',
+    },
+    test: {
+      environment: 'happy-dom',
+    },
+  }
 })

@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import source from '../bridge/maco-bridge.js?raw'
-import { MACO_HOST_ORIGINS } from './maco-iframe-bridge'
 
 const PROTOCOL = 'maco-game/v1'
 const READY = { protocol: PROTOCOL, type: 'ready' }
 const HOST_READY = { protocol: PROTOCOL, type: 'host-ready' }
+const CLASSIC_HOST_ORIGINS = [
+  'https://macogame.com',
+  'https://macomanga.com',
+  'http://localhost:7070',
+  'http://localhost:6868',
+]
 
 type MessageListener = (event: { source: unknown, origin: string, data: unknown }) => void
 
@@ -31,14 +36,14 @@ function loadClassicBridge(ancestorOrigins?: string[]) {
 }
 
 describe('bridge/maco-bridge.js', () => {
-  it('keeps the same host origins as the module bridge', () => {
-    for (const origin of MACO_HOST_ORIGINS) expect(source).toContain(`'${origin}'`)
-    expect(source.match(/'https?:\/\/[^']+'/g)?.filter(origin => !origin.includes('macogame.com/'))).toHaveLength(MACO_HOST_ORIGINS.length)
+  it('keeps its fixed Maco host origin list', () => {
+    for (const origin of CLASSIC_HOST_ORIGINS) expect(source).toContain(`'${origin}'`)
+    expect(source.match(/'https?:\/\/[^']+'/g)?.filter(origin => !origin.includes('macogame.com/'))).toHaveLength(CLASSIC_HOST_ORIGINS.length)
   })
 
   it('announces ready once to each Maco host origin and never to every origin', () => {
     const { parent } = loadClassicBridge()
-    expect(parent.postMessage.mock.calls).toEqual(MACO_HOST_ORIGINS.map(origin => [READY, origin]))
+    expect(parent.postMessage.mock.calls).toEqual(CLASSIC_HOST_ORIGINS.map(origin => [READY, origin]))
   })
 
   it('binds the first Maco host-ready origin and answers only that origin', () => {

@@ -63,3 +63,24 @@ test('zip uses the script bundled with the CLI, not a script in the game project
     rmSync(projectRoot, { recursive: true, force: true })
   }
 })
+
+test('zip loads MACOGAME_DOMAIN from the project .env for its upload instruction', () => {
+  const projectRoot = mkdtempSync(path.join(tmpdir(), 'maco-cli-test-'))
+  try {
+    writeFileSync(path.join(projectRoot, 'package.json'), `${JSON.stringify({
+      name: 'test-game',
+      version: '1.2.3',
+      maco: { key: 'test-game' },
+    }, null, 2)}\n`)
+    writeFileSync(path.join(projectRoot, '.env'), 'MACOGAME_DOMAIN=http://localhost:8787\n')
+    mkdirSync(path.join(projectRoot, 'dist'))
+    writeFileSync(path.join(projectRoot, 'dist', 'index.html'), '<p>game</p>')
+
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /Upload it at http:\/\/localhost:8787\/developer\/game-submissions with:/)
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true })
+  }
+})

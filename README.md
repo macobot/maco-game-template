@@ -53,6 +53,11 @@ pnpm typecheck
 pnpm test
 ```
 
+`MACOGAME_DOMAIN=https://macogame.com` trong `.env` là domain của host Maco được bridge tin cậy khi build. Khi
+chạy `pnpm dev`, bridge cũng nhận iframe từ `localhost`, `127.0.0.1` (mọi port) để bạn thử bằng link local; ngoại lệ
+này không có trong bản build phát hành. Thiết lập này áp dụng bridge Vite trong `src/`; bridge tĩnh
+`bridge/maco-bridge.js` cho Unity/Godot vẫn dùng danh sách host Maco mặc định.
+
 ## Cách game được mount
 
 `src/entry.ts` giao `mountGame` cho bridge (`src/maco-iframe-bridge.ts`). Khi chạy bằng `pnpm dev`, bridge mount game ngay. Bản build mở riêng ở một tab sẽ hiện "Trò chơi này chỉ chơi được trên Maco Games" thay vì game. Khi chạy trong Maco, bridge mount game khi nhận `init`, và **mount lại** mỗi lần người chơi đổi ngôn ngữ (`locale`): nó gọi `destroy()` của lần trước, rồi `mountGame(document.body, { lang })`.
@@ -104,6 +109,6 @@ Không commit hay đưa vào bản build token, `.env`, khóa API hoặc private
 
 ## Chống re-host
 
-Cả hai bridge chỉ bắt tay với trang của Maco: `https://macogame.com`, `https://macomanga.com` (admin xem thử), `http://localhost:7070` và `http://localhost:6868`. Với bridge của template (`src/maco-iframe-bridge.ts`), game chỉ mount khi Maco gửi `init`, nên bản copy bị nhúng vào trang khác hoặc mở riêng ở một tab chỉ hiện thông báo "Trò chơi này chỉ chơi được trên Maco Games". Bridge cổ điển (`bridge/maco-bridge.js`) yếu hơn, vì engine tự khởi động: nó chỉ thay trang bằng thông báo khi trình duyệt báo trang nhúng là trang lạ, hoặc khi trang lạ gửi `host-ready`. Bản copy mở riêng, hoặc nhúng bởi trang không gửi gì, vẫn chạy. Maco bù phần này bằng một đoạn script chèn vào mọi `index.html` đã phát hành; đoạn này dừng bản copy chưa bị sửa ở mọi tên miền khác. Bản build bằng bridge cũ không có khoá này, nên hãy build lại với bridge mới.
+Bridge của template (`src/maco-iframe-bridge.ts`) chỉ bắt tay với `MACOGAME_DOMAIN` (mặc định `https://macogame.com`), `https://macomanga.com` (admin xem thử), `http://localhost:7070` và `http://localhost:6868`. Riêng `pnpm dev` nhận thêm `localhost` và `127.0.0.1` ở mọi port để thử local. Khi phát hành, ngoại lệ này không còn. Game chỉ mount khi Maco gửi `init`, nên bản copy bị nhúng vào trang khác hoặc mở riêng ở một tab chỉ hiện thông báo "Trò chơi này chỉ chơi được trên Maco Games". Bridge cổ điển (`bridge/maco-bridge.js`) yếu hơn, vì engine tự khởi động: nó chỉ thay trang bằng thông báo khi trình duyệt báo trang nhúng là trang lạ, hoặc khi trang lạ gửi `host-ready`. Bản copy mở riêng, hoặc nhúng bởi trang không gửi gì, vẫn chạy. Maco bù phần này bằng một đoạn script chèn vào mọi `index.html` đã phát hành; đoạn này dừng bản copy chưa bị sửa ở mọi tên miền khác. Bản build bằng bridge cũ không có khoá này, nên hãy build lại với bridge mới.
 
 Để việc gỡ khoá khỏi bản copy tốn công hơn, đặt `"obfuscate": true` trong `maco` của `package.json`. Code của game bị làm rối khi `pnpm build`, còn `node_modules` giữ nguyên. Bản build lớn hơn một chút, nên hãy chơi thử một lượt để chắc game vẫn mượt. Bản build mở riêng ở một tab chỉ hiện thông báo khoá, nên hãy chơi nó trong khung xem thử của admin sau khi upload. Khoá này chỉ chặn bản copy chưa bị sửa; người đủ kiên nhẫn vẫn gỡ được.

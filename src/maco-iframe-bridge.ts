@@ -2,6 +2,9 @@
 // Keep it identical to that file, which follows the host in maco-games `domains/gamification/games/maco-game-bridge.ts`.
 export const MACO_GAME_PROTOCOL = 'maco-game/v1'
 
+const MACOGAME_DOMAIN = __MACOGAME_DOMAIN__
+const IS_DEVELOPMENT = import.meta.env.DEV
+
 type GameMount = (container: HTMLElement, options?: { lang?: string }) => { destroy(): void }
 
 interface BridgeMessage {
@@ -26,18 +29,29 @@ function getLocale(message: BridgeMessage) {
 }
 
 /**
- * The only pages a published build answers: the player, the admin review preview and their development servers. Every
- * Maco bridge copy (this kit and the maco-game-template bridges) must keep the same list.
+ * The only pages a published build answers: the configured player, the admin review preview and their development
+ * servers. The local-only development allowance below is deliberately not present in a published build.
  */
 export const MACO_HOST_ORIGINS = [
-  'https://macogame.com',
+  MACOGAME_DOMAIN,
   'https://macomanga.com',
   'http://localhost:7070',
   'http://localhost:6868',
 ] as const
 
-export function isMacoHostOrigin(origin: string): boolean {
-  return (MACO_HOST_ORIGINS as readonly string[]).includes(origin)
+function isLocalhostOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin)
+    return (url.protocol === 'http:' || url.protocol === 'https:')
+      && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]')
+  } catch {
+    return false
+  }
+}
+
+/** Local iframe hosts are accepted only by Vite's development server, never by a published build. */
+export function isMacoHostOrigin(origin: string, allowLocalhost = IS_DEVELOPMENT): boolean {
+  return (MACO_HOST_ORIGINS as readonly string[]).includes(origin) || (allowLocalhost && isLocalhostOrigin(origin))
 }
 
 /**
@@ -50,7 +64,7 @@ function isFramedByForeignPage() {
   return parentOrigin !== undefined && parentOrigin !== 'null' && !isMacoHostOrigin(parentOrigin)
 }
 
-export const MACO_GAMES_URL = 'https://macogame.com/'
+export const MACO_GAMES_URL = `${MACOGAME_DOMAIN}/`
 
 /** Replaces the page with a link to Maco Games when the artefact is opened on its own, outside the host's iframe. */
 export function showPlayOnMaco(container: HTMLElement) {

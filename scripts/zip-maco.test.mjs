@@ -8,6 +8,7 @@ import {
   collectArtifactFiles,
   gameKeyProblem,
   hasBridge,
+  submissionFormUrl,
   versionProblem,
   writeArtifactZip,
 } from './zip-maco.mjs'
@@ -33,6 +34,16 @@ describe('versionProblem', () => {
 
   it.each([undefined, '', '1.0', '01.0.0', 'v1.0.0', '1.0.0+build.1', '1.0.0-'])('rejects %s', (version) => {
     expect(versionProblem(version)).toEqual(expect.any(String))
+  })
+})
+
+describe('submissionFormUrl', () => {
+  it('uses the configured Maco domain', () => {
+    expect(submissionFormUrl('http://localhost:3000')).toBe('http://localhost:3000/developer/game-submissions')
+  })
+
+  it.each(['ftp://macogame.com', 'https://macogame.com/path', 'not a URL'])('rejects an invalid domain: %s', (domain) => {
+    expect(() => submissionFormUrl(domain)).toThrow('MACOGAME_DOMAIN must be an HTTP(S) origin')
   })
 })
 

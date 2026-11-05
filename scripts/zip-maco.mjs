@@ -36,9 +36,22 @@ const VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9
 /** The protocol string the server's bridge check looks for in `.html`, `.js` and `.mjs` files. */
 export const BRIDGE_PROTOCOL = 'maco-game/v1'
 const BRIDGE_SCAN_EXTENSIONS = new Set(['html', 'htm', 'js', 'mjs'])
+const DEFAULT_MACOGAME_DOMAIN = 'https://macogame.com'
 
 export class ArtifactCheckError extends Error {
   name = 'ArtifactCheckError'
+}
+
+/** Returns the configurable Maco submission form URL shown after creating an artifact. */
+export function submissionFormUrl(domain = process.env.MACOGAME_DOMAIN ?? DEFAULT_MACOGAME_DOMAIN) {
+  try {
+    const url = new URL(domain)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('unsupported protocol')
+    if (url.pathname !== '/' || url.search || url.hash) throw new Error('must be an origin')
+    return new URL('/developer/game-submissions', url).toString()
+  } catch {
+    throw new ArtifactCheckError('MACOGAME_DOMAIN must be an HTTP(S) origin, for example https://macogame.com')
+  }
 }
 
 /** Returns why `key` cannot name an uploaded game, or `undefined` when it is valid. */
@@ -217,6 +230,8 @@ export async function zipProject(root) {
 
 async function main() {
   const root = process.cwd()
+  const envFile = path.join(root, '.env')
+  if (await stat(envFile).then(file => file.isFile()).catch(() => false)) process.loadEnvFile(envFile)
   const args = process.argv.slice(2)
   const validateOnly = args.length === 1 && args[0] === '--validate'
   if (args.length > 0 && !validateOnly) {
@@ -232,7 +247,7 @@ async function main() {
   const { key, version, files, totalBytes, outFile, zipBytes } = await zipProject(root)
 
   console.log(`Wrote ${path.relative(root, outFile)}: ${files.length} files, ${totalBytes} bytes uncompressed, ${zipBytes} bytes zipped.`)
-  console.log(`Upload it at https://macogame.com/developer/game-submissions with:`)
+  console.log(`Upload it at ${submissionFormUrl()} with:`)
   console.log(`  Game key: ${key}`)
   console.log(`  Version:  ${version}`)
 }

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountGame, type MountedGame } from './main'
-import { MACO_GAME_PROTOCOL, MACO_GAMES_URL, MACO_HOST_ORIGINS, mountMacoIframeGame } from './maco-iframe-bridge'
+import { MACO_GAME_PROTOCOL, MACO_GAMES_URL, MACO_HOST_ORIGINS, isMacoHostOrigin, mountMacoIframeGame } from './maco-iframe-bridge'
 
-const HOST_ORIGIN = 'https://macogame.com'
+const HOST_ORIGIN = MACO_HOST_ORIGINS[0]
 
 function mountedLang(container: HTMLElement): string | undefined {
   const child = container.firstElementChild
@@ -50,6 +50,13 @@ describe('mountGame', () => {
 })
 
 describe('mountGame through the Maco bridge', () => {
+  it('accepts arbitrary localhost ports only in development', () => {
+    expect(isMacoHostOrigin('http://localhost:5173', true)).toBe(true)
+    expect(isMacoHostOrigin('http://127.0.0.1:4173', true)).toBe(true)
+    expect(isMacoHostOrigin('http://localhost:5173', false)).toBe(false)
+    expect(isMacoHostOrigin('https://games.example.com', true)).toBe(false)
+  })
+
   it('answers host-ready and re-mounts on init and each locale without throwing', () => {
     const parent = { postMessage: vi.fn() }
     vi.spyOn(window, 'parent', 'get').mockReturnValue(parent as unknown as Window)
