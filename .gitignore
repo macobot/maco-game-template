@@ -12,6 +12,12 @@ coverage/
 .env
 .env.*
 !.env.example
+.envrc
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
 *.log
 pnpm-debug.log*
 

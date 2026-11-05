@@ -1,2 +1,6 @@
+packages:
+  - 'games/*'
+  - 'packages/*'
+
 allowBuilds:
   esbuild: true

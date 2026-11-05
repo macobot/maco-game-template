@@ -189,8 +189,7 @@ export async function writeArtifactZip(files, outFile) {
   return size
 }
 
-async function main() {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+export async function validateProject(root) {
   const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
   const key = manifest.maco?.key
   const version = manifest.version
@@ -200,11 +199,37 @@ async function main() {
   }
 
   const { files, totalBytes } = await collectArtifactFiles(path.join(root, 'dist'))
-  if (!await hasBridge(files)) {
+  const bridgeFound = await hasBridge(files)
+  if (!bridgeFound) {
     console.warn(`warning: no .html, .js or .mjs file contains "${BRIDGE_PROTOCOL}"; Maco will show "failed" until the game loads the bridge`)
   }
+
+  return { key, version, files, totalBytes, bridgeFound }
+}
+
+export async function zipProject(root) {
+  const { key, version, files, totalBytes } = await validateProject(root)
   const outFile = path.join(root, 'maco-upload', `${key}-${version}.zip`)
   const zipBytes = await writeArtifactZip(files, outFile)
+
+  return { key, version, files, totalBytes, outFile, zipBytes }
+}
+
+async function main() {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const args = process.argv.slice(2)
+  const validateOnly = args.length === 1 && args[0] === '--validate'
+  if (args.length > 0 && !validateOnly) {
+    throw new ArtifactCheckError(`unknown option ${args[0]}; use --validate or no options`)
+  }
+
+  if (validateOnly) {
+    const { key, version, files, totalBytes } = await validateProject(root)
+    console.log(`Validated ${key}@${version}: ${files.length} files, ${totalBytes} bytes uncompressed.`)
+    return
+  }
+
+  const { key, version, files, totalBytes, outFile, zipBytes } = await zipProject(root)
 
   console.log(`Wrote ${path.relative(root, outFile)}: ${files.length} files, ${totalBytes} bytes uncompressed, ${zipBytes} bytes zipped.`)
   console.log(`Upload it at https://macogame.com/developer/game-submissions with:`)

@@ -48,6 +48,18 @@ Mỗi version là bất biến: muốn sửa, tăng `version` trong `package.jso
 
 Chi tiết về giới hạn, đuôi file được phép, version và ghi chú cho từng engine: [docs/UPLOADING.md](docs/UPLOADING.md). Hướng dẫn đầy đủ trên Maco: [Cách đưa game lên Maco](https://macogame.com/huong-dan/dua-game-len-maco).
 
+## CLI npm tùy chọn
+
+Template này là **private upload kit**, không publish game package. Khi muốn dùng CLI công khai ở một project khác, cài `@macobot/maco-cli`, rồi đăng ký script một lần:
+
+```bash
+pnpm add -D @macobot/maco-cli
+pnpm exec maco setup
+pnpm maco:publish
+```
+
+`maco:publish` chạy typecheck, test, build và tạo ZIP sẵn sàng upload; nó không tự upload hay publish package npm. CLI cũng có `pnpm maco:validate` và `pnpm maco:zip`.
+
 ## Engine khác (Unity, Godot, HTML thuần)
 
 Bạn không bắt buộc phải dùng Vite. Với engine xuất ra bản build web tĩnh, chép [`bridge/maco-bridge.js`](bridge/maco-bridge.js) vào gốc thư mục build, cạnh `index.html`, và nạp nó trong `index.html`:

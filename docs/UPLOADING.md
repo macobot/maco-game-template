@@ -11,6 +11,8 @@ pnpm build      # tạo dist/
 pnpm maco:zip   # kiểm tra dist/ và tạo maco-upload/<key>-<version>.zip
 ```
 
+`pnpm maco:validate` chỉ kiểm tra artifact, còn `pnpm maco:publish` chạy typecheck, test, build và đóng ZIP. Cả hai lệnh đều không upload tự động.
+
 Mở <https://macogame.com/developer/game-submissions>, nhập đúng **game key** và **version** mà `pnpm maco:zip` in ra, chọn file zip rồi gửi. Quản trị viên Maco xét duyệt từng version trước khi game được phát hành. Trong giai đoạn thử nghiệm, chỉ những developer được mời mới upload được.
 
 ## Cấu trúc zip
