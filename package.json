@@ -1,6 +1,6 @@
 {
   "name": "@macobot/maco-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI for validating and packaging Maco iframe game upload kits.",
   "keywords": [
     "maco",
@@ -14,6 +14,7 @@
   },
   "files": [
     "bin",
+    "scripts/zip-maco.mjs",
     "README.md"
   ],
   "engines": {
@@ -47,14 +48,16 @@
     "prepack": "pnpm verify",
     "publish:cli": "pnpm verify && npm publish --access public"
   },
+  "dependencies": {
+    "yazl": "3.3.1"
+  },
   "devDependencies": {
     "happy-dom": "21.0.4",
     "javascript-obfuscator": "^5.9.1",
     "rollup-plugin-obfuscator": "^1.1.0",
     "typescript": "^5.5.0",
     "vite": "^5.4.0",
-    "vitest": "3.2.7",
-    "yazl": "3.3.1"
+    "vitest": "3.2.7"
   },
   "bugs": {
     "url": "https://github.com/macobot/maco-game-template/issues"

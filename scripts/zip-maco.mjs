@@ -216,7 +216,7 @@ export async function zipProject(root) {
 }
 
 async function main() {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const root = process.cwd()
   const args = process.argv.slice(2)
   const validateOnly = args.length === 1 && args[0] === '--validate'
   if (args.length > 0 && !validateOnly) {

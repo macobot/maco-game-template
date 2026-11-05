@@ -4,6 +4,9 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+
+const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 function fail(message) {
   console.error(`\n✖ ${message}`)
@@ -22,8 +25,8 @@ function runProjectScript(name) {
 }
 
 function zipScript() {
-  const script = path.resolve('scripts/zip-maco.mjs')
-  if (!existsSync(script)) fail('Không tìm thấy scripts/zip-maco.mjs. Dùng Maco upload template hoặc thêm zip script vào project.')
+  const script = path.join(packageRoot, 'scripts/zip-maco.mjs')
+  if (!existsSync(script)) fail('Bản cài đặt @macobot/maco-cli không đầy đủ: thiếu scripts/zip-maco.mjs. Cài lại package.')
   return script
 }
 

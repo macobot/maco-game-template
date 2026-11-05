@@ -24,7 +24,7 @@ pnpm maco:publish
 }
 ```
 
-Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck`, `test`, `build`, rồi tạo ZIP; project cần có `scripts/zip-maco.mjs` (có sẵn trong template bên dưới).
+Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck`, `test`, `build`, rồi tạo ZIP. Bộ kiểm tra và đóng gói được cài kèm trong `@macobot/maco-cli`; project game không cần có `scripts/zip-maco.mjs`.
 
 Với npm, dùng `npm i -D @macobot/maco-cli`, `npx maco setup`, và `npm run maco:publish`.
 
