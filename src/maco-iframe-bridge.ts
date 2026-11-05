@@ -25,23 +25,63 @@ function getLocale(message: BridgeMessage) {
   return typeof locale === 'string' && locale.length <= 35 ? locale : undefined
 }
 
-function isWebOrigin(value: string) {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' || url.protocol === 'http:'
-  } catch {
-    return false
-  }
+/**
+ * The only pages a published build answers: the player, the admin review preview and their development servers. Every
+ * Maco bridge copy (this kit and the maco-game-template bridges) must keep the same list.
+ */
+export const MACO_HOST_ORIGINS = [
+  'https://macogame.com',
+  'https://macomanga.com',
+  'http://localhost:7070',
+  'http://localhost:6868',
+] as const
+
+export function isMacoHostOrigin(origin: string): boolean {
+  return (MACO_HOST_ORIGINS as readonly string[]).includes(origin)
 }
 
 /**
- * Mount a game as an isolated iframe artefact. The parent origin is bound on
- * its explicit handshake; every later command must come from that same window
- * and origin. Do not put credentials or score-authority in this bridge.
+ * Where the browser reports the embedding page (Chromium, Safari), refuse a foreign one before any message arrives.
+ * `"null"` is not foreign: Maco frames games with `referrerpolicy="no-referrer"`, which hides its origin there, so the
+ * handshake decides. Firefox has no `ancestorOrigins`, and the handshake decides there too.
+ */
+function isFramedByForeignPage() {
+  const parentOrigin = (location as Location & { ancestorOrigins?: DOMStringList }).ancestorOrigins?.[0]
+  return parentOrigin !== undefined && parentOrigin !== 'null' && !isMacoHostOrigin(parentOrigin)
+}
+
+export const MACO_GAMES_URL = 'https://macogame.com/'
+
+/** Replaces the page with a link to Maco Games when the artefact is opened on its own, outside the host's iframe. */
+export function showPlayOnMaco(container: HTMLElement) {
+  const notice = document.createElement('main')
+  notice.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:100%;padding:24px;box-sizing:border-box;font:16px/1.5 system-ui,sans-serif;color:#fff;text-align:center'
+  const message = document.createElement('p')
+  message.style.margin = '0'
+  message.textContent = 'Trò chơi này chỉ chơi được trên Maco Games.'
+  const link = document.createElement('a')
+  link.href = MACO_GAMES_URL
+  link.textContent = 'Chơi tại macogame.com'
+  link.style.cssText = 'padding:12px 20px;border-radius:999px;background:#2563eb;color:#fff;font-weight:600;text-decoration:none'
+  notice.append(message, link)
+  container.replaceChildren(notice)
+}
+
+/**
+ * Mount a game as an isolated iframe artefact. Only a Maco host origin can complete the handshake, and every later
+ * command must come from that same window and origin. A copy framed by any other page shows the Maco Games notice
+ * instead of the game. Do not put credentials or score-authority in this bridge.
  */
 export function mountMacoIframeGame(mountGame: GameMount) {
   if (window.parent === window) {
-    mountGame(document.body)
+    // A published build plays only inside Maco Games; `vite dev` still mounts it standalone for development.
+    if ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) mountGame(document.body)
+    else showPlayOnMaco(document.body)
+    return
+  }
+
+  if (isFramedByForeignPage()) {
+    showPlayOnMaco(document.body)
     return
   }
 
@@ -53,8 +93,16 @@ export function mountMacoIframeGame(mountGame: GameMount) {
     mountedGame = mountGame(document.body, locale ? { lang: locale } : undefined)
   }
 
-  window.addEventListener('message', (event) => {
-    if (event.source !== window.parent || !isWebOrigin(event.origin) || !isBridgeMessage(event.data)) return
+  const onMessage = (event: MessageEvent) => {
+    if (event.source !== window.parent || !isBridgeMessage(event.data)) return
+    if (!isMacoHostOrigin(event.origin)) {
+      // A page outside Maco speaking the protocol: a re-hosted copy. It never gets the game.
+      window.removeEventListener('message', onMessage)
+      mountedGame?.destroy()
+      mountedGame = undefined
+      showPlayOnMaco(document.body)
+      return
+    }
 
     if (event.data.type === 'host-ready') {
       hostOrigin ??= event.origin
@@ -65,7 +113,9 @@ export function mountMacoIframeGame(mountGame: GameMount) {
 
     if (hostOrigin !== event.origin) return
     if (event.data.type === 'init' || event.data.type === 'locale') mount(getLocale(event.data))
-  })
+  }
+  window.addEventListener('message', onMessage)
 
-  window.parent.postMessage({ protocol: MACO_GAME_PROTOCOL, type: 'ready' }, '*')
+  // A post whose target origin does not match the parent is dropped, so only a Maco parent hears this.
+  for (const origin of MACO_HOST_ORIGINS) window.parent.postMessage({ protocol: MACO_GAME_PROTOCOL, type: 'ready' }, origin)
 }

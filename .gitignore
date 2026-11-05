@@ -28,3 +28,6 @@ pnpm-debug.log*
 
 # Upload zips written by `pnpm maco:zip`
 maco-upload/
+
+# Temporary build fixtures of the obfuscation test
+.maco-obfuscation-*/
