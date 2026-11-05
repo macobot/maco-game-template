@@ -1,0 +1,20 @@
+{
+  "name": "maco-cli-playground",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "maco": {
+    "key": "maco-cli-playground"
+  },
+  "scripts": {
+    "typecheck": "node --check scripts/build.mjs",
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "maco:validate": "maco validate",
+    "maco:zip": "maco zip",
+    "maco:publish": "maco publish"
+  },
+  "devDependencies": {
+    "@macobot/maco-cli": "link:.."
+  }
+}
