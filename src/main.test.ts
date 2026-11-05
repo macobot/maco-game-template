@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountGame, type MountedGame } from './main'
-import { MACO_GAME_PROTOCOL, mountMacoIframeGame } from './maco-iframe-bridge'
+import { MACO_GAME_PROTOCOL, MACO_GAMES_URL, MACO_HOST_ORIGINS, mountMacoIframeGame } from './maco-iframe-bridge'
 
 const HOST_ORIGIN = 'https://macogame.com'
 
@@ -57,7 +57,7 @@ describe('mountGame through the Maco bridge', () => {
     window.addEventListener('error', event => errors.push(event.error))
 
     mountMacoIframeGame(mountGame)
-    expect(parent.postMessage).toHaveBeenCalledWith({ protocol: MACO_GAME_PROTOCOL, type: 'ready' }, '*')
+    expect(parent.postMessage.mock.calls.map(([, target]) => target)).toEqual([...MACO_HOST_ORIGINS])
 
     const send = (type: string, locale?: string) => window.dispatchEvent(new MessageEvent('message', {
       data: { protocol: MACO_GAME_PROTOCOL, type, ...(locale ? { payload: { locale } } : {}) },
@@ -77,5 +77,35 @@ describe('mountGame through the Maco bridge', () => {
     expect(errors).toEqual([])
     expect(document.body.children).toHaveLength(1)
     expect(mountedLang(document.body)).toBe('en')
+  })
+
+  function framedBy(origin: string) {
+    const parent = { postMessage: vi.fn() }
+    vi.spyOn(window, 'parent', 'get').mockReturnValue(parent as unknown as Window)
+    mountMacoIframeGame(mountGame)
+    const send = (type: string) => window.dispatchEvent(new MessageEvent('message', {
+      data: { protocol: MACO_GAME_PROTOCOL, type, payload: { locale: 'vi' } },
+      origin,
+      source: parent as unknown as Window,
+    }))
+    return { parent, send }
+  }
+
+  it('mounts for the admin review preview', () => {
+    const { send } = framedBy('https://macomanga.com')
+    send('host-ready')
+    send('init')
+    expect(mountedLang(document.body)).toBe('vi')
+  })
+
+  it('shows the Maco Games notice to a page outside Maco instead of the game', () => {
+    const { parent, send } = framedBy('https://games.example.com')
+    parent.postMessage.mockClear()
+    send('host-ready')
+    send('init')
+    expect(parent.postMessage).not.toHaveBeenCalled()
+    expect(document.body.firstElementChild?.shadowRoot).toBeFalsy()
+    expect(document.body.textContent).not.toContain('Thay thế màn hình mẫu')
+    expect(document.querySelector('a')?.getAttribute('href')).toBe(MACO_GAMES_URL)
   })
 })

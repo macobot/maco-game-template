@@ -70,7 +70,7 @@ Maco gửi `host-ready` vào iframe, chờ game trả lời `ready`, rồi gửi
 <script src="maco-bridge.js"></script>
 ```
 
-Script này chỉ trả lời bắt tay để Maco ngừng chờ; nó bỏ qua `init` và `locale`, nên game tự khởi động như bình thường.
+Script này chỉ trả lời bắt tay để Maco ngừng chờ; nó bỏ qua `init` và `locale`, nên game tự khởi động như bình thường. Nó chỉ trả lời trang của Maco. Khi trình duyệt báo trang nhúng là trang lạ, hoặc trang lạ gửi `host-ready`, nó thay cả trang bằng thông báo "Trò chơi này chỉ chơi được trên Maco Games", nên canvas của engine biến khỏi trang (vòng lặp và âm thanh của engine có thể vẫn chạy ngầm). Nó không chặn được bản copy mở riêng ở một tab, hoặc bị nhúng bởi trang không gửi gì. Hãy nạp nó làm script đầu tiên trong `<head>` để nó chạy trước engine.
 
 ## Ghi chú theo engine
 
@@ -81,3 +81,11 @@ Script này chỉ trả lời bắt tay để Maco ngừng chờ; nó bỏ qua `
 ## Bảo mật
 
 Không đưa token, khóa API, `.env` hay mã chỉ dành cho server vào bản build. Mọi file trong zip đều công khai sau khi game được phát hành.
+
+Maco bảo vệ game đã phát hành theo ba lớp:
+
+- Request không đến từ iframe của Maco (ví dụ `curl` không kèm header của trình duyệt) bị từ chối.
+- Mỗi `index.html` được chèn một đoạn script tự dừng game khi chạy ở tên miền khác.
+- Bridge chỉ bắt tay với trang của Maco. Bridge của template không mount game nếu không có Maco; bridge cổ điển yếu hơn (xem mục Bridge). Bật `"obfuscate": true` để khoá trong bridge của template khó gỡ hơn.
+
+Những lớp này không chặn được người chơi lưu file bằng DevTools, cũng như bản copy đã bị sửa để gỡ khoá. Upload game nghĩa là bạn cho phép Maco phục vụ game đó. Đem game lấy từ Maco đi host ở nơi khác là không được phép.
