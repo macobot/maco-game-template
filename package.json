@@ -2,7 +2,7 @@
   "name": "@macobot/maco-game-template",
   "version": "0.2.0",
   "description": "Template for Maco browser games shipped as iframe upload kits.",
-  "private": true,
+  "private": false,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/macobot/maco-game-template.git"
