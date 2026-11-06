@@ -13,10 +13,12 @@ function fail(message) {
 }
 
 function openUrl(url) {
+  // On Windows, `cmd /c start` would read the `&` between query parameters as a command separator and drop the
+  // version; the URL protocol handler receives the URL as one argument without a shell.
   const [opener, openerArgs] = process.platform === 'darwin'
     ? ['open', [url]]
     : process.platform === 'win32'
-      ? ['cmd', ['/c', 'start', '', url]]
+      ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
       : ['xdg-open', [url]]
   const result = spawnSync(opener, openerArgs, { stdio: 'ignore', detached: true })
   if (result.error || result.status !== 0) console.warn(`Không thể tự mở trình duyệt. Mở URL này:\n${url}`)

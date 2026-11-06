@@ -5,8 +5,11 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { gameKeyFromName, gameKeyProblem } from '../scripts/zip-maco.mjs'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// The template ships this key; a project made from it has not chosen its own key yet.
+const TEMPLATE_GAME_KEY = 'my-game'
 
 function fail(message) {
   console.error(`\n✖ ${message}`)
@@ -19,9 +22,15 @@ function command(name, args) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
+function readProjectManifest() {
+  const packagePath = path.resolve('package.json')
+  if (!existsSync(packagePath)) fail('Không tìm thấy package.json ở root project.')
+  return { packagePath, packageJson: JSON.parse(readFileSync(packagePath, 'utf8')) }
+}
+
 function runProjectScript(name) {
   const usesNpm = process.env.npm_config_user_agent?.startsWith('npm/')
-  command(usesNpm ? 'npm' : 'pnpm', usesNpm ? ['run', name] : [name])
+  command(usesNpm ? 'npm' : 'pnpm', ['run', name])
 }
 
 function zipScript() {
@@ -36,14 +45,27 @@ function handoffScript() {
   return script
 }
 
-function setup() {
-  const packagePath = path.resolve('package.json')
-  if (!existsSync(packagePath)) fail('Không tìm thấy package.json ở root project.')
-
-  const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
-  if (typeof packageJson.name !== 'string' || !packageJson.name) {
-    fail('package.json cần có trường "name" là tên game để tạo maco.key.')
+/**
+ * Keeps a key the developer already chose, because a key is permanent on Maco after the first upload and a rename
+ * of `name` must not move the game to a new key. Only a missing, invalid or template key is derived from `name`.
+ */
+function resolveGameKey(packageJson, currentKey) {
+  if (typeof currentKey === 'string' && currentKey !== TEMPLATE_GAME_KEY && !gameKeyProblem(currentKey)) {
+    return { key: currentKey, kept: true }
   }
+  if (typeof packageJson.name !== 'string' || !packageJson.name) {
+    fail('package.json cần có trường "name" là tên game, hoặc đặt sẵn "maco": { "key": "..." }.')
+  }
+  const key = gameKeyFromName(packageJson.name)
+  const problem = gameKeyProblem(key)
+  if (problem) {
+    fail(`Không tạo được game key từ name "${packageJson.name}": ${problem}. Đặt "maco": { "key": "..." } trong package.json rồi chạy lại.`)
+  }
+  return { key, kept: false }
+}
+
+function setup() {
+  const { packagePath, packageJson } = readProjectManifest()
   const aliases = {
     'maco:validate': 'maco validate',
     'maco:zip': 'maco zip',
@@ -52,12 +74,30 @@ function setup() {
   const maco = packageJson.maco && typeof packageJson.maco === 'object' && !Array.isArray(packageJson.maco)
     ? packageJson.maco
     : {}
+  const { key, kept } = resolveGameKey(packageJson, maco.key)
   writeFileSync(packagePath, `${JSON.stringify({
     ...packageJson,
-    maco: { ...maco, key: packageJson.name },
+    maco: { ...maco, key },
     scripts: { ...packageJson.scripts, ...aliases },
   }, null, 2)}\n`)
-  console.log(`\n✓ Đã ghi đè maco:validate, maco:zip, maco:publish và đặt maco.key thành ${packageJson.name} trong package.json.`)
+  console.log('\n✓ Đã ghi đè maco:validate, maco:zip, maco:publish trong package.json.')
+  console.log(kept
+    ? `✓ Giữ nguyên maco.key: ${key}.`
+    : `✓ Đặt maco.key thành ${key}. Key là vĩnh viễn sau lần upload đầu tiên; sửa trong package.json nếu muốn key khác.`)
+}
+
+function publish() {
+  const { packageJson } = readProjectManifest()
+  const scripts = packageJson.scripts ?? {}
+  if (!scripts.build) fail('package.json cần có script "build" tạo bản build web trong dist/.')
+  // Checks are optional: a plain HTML or engine-exported project may have no type checker or tests.
+  for (const name of ['typecheck', 'test']) {
+    if (scripts[name]) runProjectScript(name)
+    else console.log(`Bỏ qua "${name}": package.json không có script này.`)
+  }
+  runProjectScript('build')
+  command(process.execPath, [zipScript()])
+  command(process.execPath, [handoffScript()])
 }
 
 const [action, ...args] = process.argv.slice(2)
@@ -69,10 +109,4 @@ if (args.length) fail(`maco ${action} không nhận tham số.`)
 if (action === 'setup') setup()
 if (action === 'validate') command(process.execPath, [zipScript(), '--validate'])
 if (action === 'zip') command(process.execPath, [zipScript()])
-if (action === 'publish') {
-  runProjectScript('typecheck')
-  runProjectScript('test')
-  runProjectScript('build')
-  command(process.execPath, [zipScript()])
-  command(process.execPath, [handoffScript()])
-}
+if (action === 'publish') publish()

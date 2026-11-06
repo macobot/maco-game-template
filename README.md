@@ -12,7 +12,7 @@ pnpm exec maco setup
 pnpm maco:publish
 ```
 
-`maco setup` ghi đè các script Maco trong `package.json` để luôn dùng CLI hiện tại, đồng thời đặt `maco.key` bằng `name` của project (tên game và cũng là key dùng khi submission). Các thiết lập Maco khác, ví dụ `obfuscate`, vẫn được giữ nguyên:
+`maco setup` ghi đè các script Maco trong `package.json` để luôn dùng CLI hiện tại. Nếu project chưa có `maco.key` (hoặc vẫn là `my-game` của template), CLI tạo key từ `name`: bỏ scope `@ten/`, bỏ dấu, chuyển về chữ thường và nối bằng dấu gạch ngang, ví dụ `@ten/Space Runner` thành `space-runner`. Key đã đặt sẵn thì được giữ nguyên, vì key là vĩnh viễn sau lần upload đầu tiên. Nếu `name` không tạo được key hợp lệ, CLI dừng và nhắc bạn tự đặt `maco.key`. Các thiết lập Maco khác, ví dụ `obfuscate`, vẫn được giữ nguyên:
 
 ```json
 {
@@ -28,7 +28,7 @@ pnpm maco:publish
 }
 ```
 
-Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck`, `test`, `build`, tạo ZIP, rồi đọc `maco.key`, `version` và `README.md` trong project game để mở form `/developer/game-submissions` với metadata đã điền sẵn. Nội dung README được truyền qua URL fragment `#readme=…`, để form frontend có thể đọc mà nội dung không đi theo HTTP request; vẫn chỉ ghi thông tin công khai, không chứa token hay thông tin nhạy cảm. Bộ kiểm tra, đóng gói và handoff được cài kèm trong `@macobot/maco-cli`; project game không cần có các script này.
+Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck` và `test` nếu project có các script này (bỏ qua nếu không có), rồi `build` (bắt buộc), tạo ZIP, rồi đọc `maco.key`, `version` và `README.md` trong project game để mở form `/developer/game-submissions` với metadata đã điền sẵn. Nội dung README được truyền qua URL fragment `#readme=…`, để form frontend có thể đọc mà nội dung không đi theo HTTP request; vẫn chỉ ghi thông tin công khai, không chứa token hay thông tin nhạy cảm. Bộ kiểm tra, đóng gói và handoff được cài kèm trong `@macobot/maco-cli`; project game không cần có các script này.
 
 Với npm, dùng `npm i -D @macobot/maco-cli`, `npx maco setup`, và `npm run maco:publish`.
 
