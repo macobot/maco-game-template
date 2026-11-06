@@ -22,12 +22,13 @@ test('prints usage without an action', () => {
   assert.match(result.stderr, /maco <setup\|validate\|zip\|publish>/)
 })
 
-test('setup adds the Maco package scripts without removing existing scripts', () => {
+test('setup overwrites the Maco package scripts and sets the game key from the project name', () => {
   const projectRoot = mkdtempSync(path.join(tmpdir(), 'maco-cli-test-'))
   try {
     writeFileSync(path.join(projectRoot, 'package.json'), `${JSON.stringify({
       name: 'test-game',
-      scripts: { build: 'vite build' },
+      maco: { key: 'old-game', obfuscate: true },
+      scripts: { build: 'vite build', 'maco:zip': 'custom zip' },
     }, null, 2)}\n`)
 
     const result = run(['setup'], projectRoot)
@@ -38,6 +39,7 @@ test('setup adds the Maco package scripts without removing existing scripts', ()
     assert.equal(manifest.scripts['maco:validate'], 'maco validate')
     assert.equal(manifest.scripts['maco:zip'], 'maco zip')
     assert.equal(manifest.scripts['maco:publish'], 'maco publish')
+    assert.deepEqual(manifest.maco, { key: 'test-game', obfuscate: true })
   } finally {
     rmSync(projectRoot, { recursive: true, force: true })
   }

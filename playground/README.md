@@ -15,8 +15,8 @@ và nội dung README đã lấy từ project này. Chọn ZIP vừa tạo trư�
 Hai lệnh `pnpm playground:maco:validate` và `pnpm playground:maco:zip` cũng dùng cùng `.env`. Biến được export ở shell
 vẫn được ưu tiên hơn giá trị trong file `.env`.
 
-Để kiểm tra việc `maco setup` thêm scripts, hãy xóa ba script `maco:*` trong `package.json` rồi chạy:
+Để kiểm tra việc `maco setup` ghi đè ba script `maco:*` và đồng bộ `maco.key` với `name` của project, hãy chạy:
 
 ```bash
-pnpm exec maco setup
+pnpm playground:maco:setup
 ```

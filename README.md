@@ -12,10 +12,14 @@ pnpm exec maco setup
 pnpm maco:publish
 ```
 
-`maco setup` thêm các script sau vào `package.json` mà không ghi đè script `maco:*` có giá trị khác:
+`maco setup` ghi đè các script Maco trong `package.json` để luôn dùng CLI hiện tại, đồng thời đặt `maco.key` bằng `name` của project (tên game và cũng là key dùng khi submission). Các thiết lập Maco khác, ví dụ `obfuscate`, vẫn được giữ nguyên:
 
 ```json
 {
+  "name": "project-name",
+  "maco": {
+    "key": "project-name"
+  },
   "scripts": {
     "maco:validate": "maco validate",
     "maco:zip": "maco zip",

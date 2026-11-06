@@ -41,18 +41,23 @@ function setup() {
   if (!existsSync(packagePath)) fail('Không tìm thấy package.json ở root project.')
 
   const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
+  if (typeof packageJson.name !== 'string' || !packageJson.name) {
+    fail('package.json cần có trường "name" là tên game để tạo maco.key.')
+  }
   const aliases = {
     'maco:validate': 'maco validate',
     'maco:zip': 'maco zip',
     'maco:publish': 'maco publish',
   }
-  const scripts = { ...packageJson.scripts }
-  for (const [name, value] of Object.entries(aliases)) {
-    if (scripts[name] && scripts[name] !== value) fail(`package.json đã có scripts.${name} khác (${scripts[name]}). Không tự ghi đè.`)
-    scripts[name] = value
-  }
-  writeFileSync(packagePath, `${JSON.stringify({ ...packageJson, scripts }, null, 2)}\n`)
-  console.log('\n✓ Đã thêm maco:validate, maco:zip và maco:publish vào package.json.')
+  const maco = packageJson.maco && typeof packageJson.maco === 'object' && !Array.isArray(packageJson.maco)
+    ? packageJson.maco
+    : {}
+  writeFileSync(packagePath, `${JSON.stringify({
+    ...packageJson,
+    maco: { ...maco, key: packageJson.name },
+    scripts: { ...packageJson.scripts, ...aliases },
+  }, null, 2)}\n`)
+  console.log(`\n✓ Đã ghi đè maco:validate, maco:zip, maco:publish và đặt maco.key thành ${packageJson.name} trong package.json.`)
 }
 
 const [action, ...args] = process.argv.slice(2)

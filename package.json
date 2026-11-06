@@ -43,6 +43,7 @@
     "maco:validate": "maco validate",
     "maco:zip": "maco zip",
     "maco:publish": "maco publish",
+    "playground:maco:setup": "pnpm --dir playground exec maco setup",
     "playground:maco:validate": "node scripts/run-playground.mjs maco:validate",
     "playground:maco:zip": "node scripts/run-playground.mjs maco:zip",
     "playground:maco:publish": "node scripts/run-playground.mjs maco:publish",
