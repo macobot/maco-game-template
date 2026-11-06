@@ -3,7 +3,7 @@
 // https://macogame.com/developer/game-submissions, failing locally on every rule the server enforces.
 import { Buffer } from 'node:buffer'
 import { createWriteStream } from 'node:fs'
-import { lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import yazl from 'yazl'
@@ -37,6 +37,9 @@ const VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9
 export const BRIDGE_PROTOCOL = 'maco-game/v1'
 const BRIDGE_SCAN_EXTENSIONS = new Set(['html', 'htm', 'js', 'mjs'])
 const DEFAULT_MACOGAME_DOMAIN = 'https://macogame.com'
+const CLASSIC_BRIDGE_FILE = 'maco-bridge.js'
+const CLASSIC_BRIDGE_TAG = '<script data-maco-bridge="classic" src="./maco-bridge.js"></script>'
+const classicBridgePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bridge', CLASSIC_BRIDGE_FILE)
 
 export class ArtifactCheckError extends Error {
   name = 'ArtifactCheckError'
@@ -231,18 +234,19 @@ export async function validateProject(root) {
   const { files, totalBytes } = await collectArtifactFiles(path.join(root, 'dist'))
   const bridgeFound = await hasBridge(files)
   if (!bridgeFound) {
-    console.warn(`warning: no .html, .js or .mjs file contains "${BRIDGE_PROTOCOL}"; Maco will show "failed" until the game loads the bridge`)
+    console.warn(`warning: no .html, .js or .mjs file contains "${BRIDGE_PROTOCOL}"; maco zip/publish will add the classic iframe bridge to dist/`)
   }
 
   return { key, version, files, totalBytes, bridgeFound }
 }
 
 export async function zipProject(root) {
+  const bridgeAdded = await ensureArtifactBridge(root)
   const { key, version, files, totalBytes } = await validateProject(root)
   const outFile = path.join(root, 'maco-upload', `${key}-${version}.zip`)
   const zipBytes = await writeArtifactZip(files, outFile)
 
-  return { key, version, files, totalBytes, outFile, zipBytes }
+  return { key, version, files, totalBytes, outFile, zipBytes, bridgeAdded }
 }
 
 async function main() {
@@ -261,8 +265,9 @@ async function main() {
     return
   }
 
-  const { key, version, files, totalBytes, outFile, zipBytes } = await zipProject(root)
+  const { key, version, files, totalBytes, outFile, zipBytes, bridgeAdded } = await zipProject(root)
 
+  if (bridgeAdded) console.log(`Added ${CLASSIC_BRIDGE_FILE} to dist/ so the game can complete the Maco iframe handshake.`)
   console.log(`Wrote ${path.relative(root, outFile)}: ${files.length} files, ${totalBytes} bytes uncompressed, ${zipBytes} bytes zipped.`)
   console.log(`Upload it at ${submissionFormUrl()} with:`)
   console.log(`  Game key: ${key}`)

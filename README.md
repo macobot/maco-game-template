@@ -42,6 +42,8 @@ Template để làm một web game và đưa lên [Maco](https://macogame.com) d
 
 Bridge `maco-game/v1` đã có sẵn, nên Maco nhận ra game đã sẵn sàng và truyền ngôn ngữ của người chơi vào game.
 
+Với game có source riêng, bridge tự thêm khi zip là phương án tương thích chung nhất: game vẫn tự khởi động như trước, còn Maco nhận `ready`. Nếu game cần chỉ khởi động sau `init`, nhận `locale`, hoặc muốn khóa bản copy ngay từ source, hãy tích hợp `src/maco-iframe-bridge.ts` và gọi `mountMacoIframeGame(mountGame)` theo template. CLI không tự rewrite `iframe.ts`, vì không thể đoán an toàn entry point, vòng đời và chữ ký hàm mount của từng engine.
+
 > Maco không nhận game qua npm package. `maco:publish` kiểm tra, build, tạo ZIP và mở form upload; bạn vẫn tự chọn file ZIP rồi gửi form.
 
 ## Bắt đầu

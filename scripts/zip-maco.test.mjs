@@ -9,6 +9,7 @@ import {
   gameKeyFromName,
   gameKeyProblem,
   hasBridge,
+  zipProject,
   submissionFormUrl,
   versionProblem,
   writeArtifactZip,
@@ -160,5 +161,27 @@ describe('collectArtifactFiles', () => {
     expect(zip.includes('assets/app.js')).toBe(true)
     expect(zip.includes('index.html')).toBe(true)
     expect(zip.includes(dist)).toBe(false)
+  })
+
+  it('adds the classic iframe bridge to a build that has no Maco bridge', async () => {
+    const project = await mkdtemp(path.join(tmpdir(), 'maco-zip-project-'))
+    try {
+      await mkdir(path.join(project, 'dist'))
+      await writeFile(path.join(project, 'package.json'), JSON.stringify({
+        name: 'test-game', version: '1.0.0', maco: { key: 'test-game' },
+      }))
+      await writeFile(path.join(project, 'dist', 'index.html'), '<!doctype html><html><head></head><body><canvas></canvas></body></html>')
+
+      const result = await zipProject(project)
+      const html = await readFile(path.join(project, 'dist', 'index.html'), 'utf8')
+      const bridge = await readFile(path.join(project, 'dist', 'maco-bridge.js'), 'utf8')
+
+      expect(result.bridgeAdded).toBe(true)
+      expect(html).toContain('<script data-maco-bridge="classic" src="./maco-bridge.js"></script>')
+      expect(bridge).toContain('maco-game/v1')
+      expect(result.files.map(file => file.path)).toContain('maco-bridge.js')
+    } finally {
+      await rm(project, { recursive: true, force: true })
+    }
   })
 })
