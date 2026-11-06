@@ -13,6 +13,12 @@ const CLASSIC_HOST_ORIGINS = [
 
 type MessageListener = (event: { source: unknown, origin: string, data: unknown }) => void
 
+interface StaticMacoBridge {
+  getLocale(): string | undefined
+  on(type: 'init' | 'locale' | 'input', callback: (value: unknown) => void): () => void
+  requestRoomTicket(room?: string | null): Promise<{ room: string, url: string, ticket: string, expiresAt: string, driver: string }>
+}
+
 /** Runs the classic script against a fake iframe window whose parent records every message. */
 function loadClassicBridge(ancestorOrigins?: string[]) {
   const parent = { postMessage: vi.fn() }
@@ -88,6 +94,32 @@ describe('bridge/maco-bridge.js', () => {
     receive(HOST_READY)
     expect(parent.postMessage).toHaveBeenLastCalledWith(READY, 'https://macogame.com')
     expect(documentElement.innerHTML).toContain('<canvas>')
+  })
+
+  it('exposes locale/input callbacks and asks only the bound Maco parent for a room ticket', async () => {
+    const { parent, receive, fakeWindow } = loadClassicBridge(['null'])
+    const bridge = (fakeWindow as typeof fakeWindow & { MacoBridge: StaticMacoBridge }).MacoBridge
+    const locales: unknown[] = []
+    bridge.on('locale', locale => locales.push(locale))
+
+    receive(HOST_READY)
+    receive({ protocol: PROTOCOL, type: 'init', payload: { locale: 'vi' } })
+    receive({ protocol: PROTOCOL, type: 'locale', payload: { locale: 'en' } })
+    expect(bridge.getLocale()).toBe('en')
+    expect(locales).toEqual(['en'])
+
+    const ticketPromise = bridge.requestRoomTicket(null)
+    const request = parent.postMessage.mock.calls.at(-1)![0]
+    expect(request).toMatchObject({ protocol: PROTOCOL, type: 'online-ticket-request', payload: { room: null, channel: 'game' } })
+    receive({
+      protocol: PROTOCOL,
+      type: 'online-ticket',
+      payload: {
+        id: request.payload.id,
+        ticket: { room: 'ABCD', url: 'https://rooms.example/ABCD', ticket: 'signed', expiresAt: '2026-11-06T00:00:00.000Z', driver: 'rtc' }
+      }
+    })
+    await expect(ticketPromise).resolves.toMatchObject({ room: 'ABCD', driver: 'rtc' })
   })
 
   it('ignores messages from other windows, other protocols, init and locale', () => {

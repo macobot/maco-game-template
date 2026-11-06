@@ -107,7 +107,36 @@ Bạn không bắt buộc phải dùng Vite. Với engine xuất ra bản build 
 <script src="maco-bridge.js"></script>
 ```
 
-Script này trả lời bắt tay `host-ready` bằng `ready`, để trình chơi của Maco không báo "failed" khi game đang chạy. Nó không mount gì và bỏ qua `init`/`locale`. Sau đó đóng gói thư mục build thành zip với `index.html` ở gốc và upload như trên.
+Script này trả lời bắt tay `host-ready` bằng `ready`, để trình chơi của Maco không báo "failed" khi game đang chạy. Nó không mount hay khởi động engine; engine vẫn tự khởi động như bình thường. Sau đó đóng gói thư mục build thành zip với `index.html` ở gốc và upload như trên.
+
+### Bridge API cho game tĩnh
+
+Ngoài handshake, bản bridge tĩnh đặt `window.MacoBridge`, để game ở R2/engine khác dùng cùng một contract mà không phải import code của Maco:
+
+```js
+MacoBridge.on('locale', (locale) => setLanguage(locale))
+MacoBridge.on('input', (input) => applyHostInput(input))
+
+const ticket = await MacoBridge.requestRoomTicket(roomCode) // `null` để tạo room
+const voiceTicket = await MacoBridge.requestVoiceTicket(roomCode)
+```
+
+`requestRoomTicket` và `requestVoiceTicket` chỉ gửi `postMessage` tới parent Maco đã hoàn tất handshake. Bridge không chứa API URL, cookie, token ký hay secret. Parent cần trả lời theo contract sau (cũng kiểm `origin` và đúng `iframe.contentWindow`):
+
+```ts
+// iframe -> parent
+{ protocol: 'maco-game/v1', type: 'online-ticket-request',
+  payload: { id: string, room: string | null, channel: 'game' | 'voice' } }
+
+// parent -> iframe
+{ protocol: 'maco-game/v1', type: 'online-ticket',
+  payload: { id: string, ticket: GameRoomTicket } }
+// Hoặc: payload: { id: string, error: 'invalid' | 'unavailable' | 'denied' }
+```
+
+Parent phải lấy game id từ cấu hình artifact đã duyệt, **không** từ message iframe, rồi mới gọi endpoint cấp ticket. Ticket là bearer credential ngắn hạn, nên chỉ gửi về iframe URL/origin của artifact đã duyệt. Nếu host chưa hỗ trợ contract này, promise sẽ từ chối sau 12 giây; game nên hiển thị "online unavailable".
+
+Bridge chuẩn hóa quyền truy cập vào room/RTC và locale/input, chứ không biến tự động một game single-player thành multiplayer. Mỗi game vẫn phải có adapter nhỏ cho input, snapshot/rollback hoặc server-authoritative simulation, lobby và UI kết quả. Đừng đưa simulation/luật của Paint Tanks vào bridge: phần tái sử dụng đúng chỗ là `realtime` room protocol/client ở host và API bridge này.
 
 ## Quy tắc bảo mật
 
