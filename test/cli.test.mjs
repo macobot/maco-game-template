@@ -84,3 +84,32 @@ test('zip loads MACOGAME_DOMAIN from the project .env for its upload instruction
     rmSync(projectRoot, { recursive: true, force: true })
   }
 })
+
+test('handoff reads the game metadata and prepares the submission form', () => {
+  const projectRoot = mkdtempSync(path.join(tmpdir(), 'maco-cli-test-'))
+  try {
+    writeFileSync(path.join(projectRoot, 'package.json'), `${JSON.stringify({
+      name: 'test-game',
+      version: '1.2.3',
+      maco: { key: 'test-game' },
+    }, null, 2)}\n`)
+    writeFileSync(path.join(projectRoot, 'README.md'), '# Test game\nShort description.\n')
+
+    const result = spawnSync(process.execPath, [path.join(packageRoot, 'scripts/handoff-maco.mjs'), '--dry-run'], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+    })
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /Game key: test-game/)
+    assert.match(result.stdout, /Version: 1\.2\.3/)
+    assert.match(result.stdout, /README: README\.md/)
+    const form = new URL(result.stdout.match(/Form: (.+)/)?.[1])
+    assert.equal(form.searchParams.get('game_key'), 'test-game')
+    assert.equal(form.searchParams.get('version'), '1.2.3')
+    assert.equal(new URLSearchParams(form.hash.slice(1)).get('readme'), '# Test game\nShort description.\n')
+    assert.match(result.stdout, /Dry run hoàn tất/)
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true })
+  }
+})

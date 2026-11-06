@@ -30,6 +30,12 @@ function zipScript() {
   return script
 }
 
+function handoffScript() {
+  const script = path.join(packageRoot, 'scripts/handoff-maco.mjs')
+  if (!existsSync(script)) fail('Bản cài đặt @macobot/maco-cli không đầy đủ: thiếu scripts/handoff-maco.mjs. Cài lại package.')
+  return script
+}
+
 function setup() {
   const packagePath = path.resolve('package.json')
   if (!existsSync(packagePath)) fail('Không tìm thấy package.json ở root project.')
@@ -63,4 +69,5 @@ if (action === 'publish') {
   runProjectScript('test')
   runProjectScript('build')
   command(process.execPath, [zipScript()])
+  command(process.execPath, [handoffScript()])
 }

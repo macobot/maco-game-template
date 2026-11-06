@@ -1,6 +1,6 @@
 {
   "name": "@macobot/maco-cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CLI for validating and packaging Maco iframe game upload kits.",
   "keywords": [
     "maco",
@@ -15,6 +15,7 @@
   "files": [
     "bin",
     "scripts/zip-maco.mjs",
+    "scripts/handoff-maco.mjs",
     "README.md"
   ],
   "engines": {
@@ -45,7 +46,7 @@
     "playground:maco:validate": "node scripts/run-playground.mjs maco:validate",
     "playground:maco:zip": "node scripts/run-playground.mjs maco:zip",
     "playground:maco:publish": "node scripts/run-playground.mjs maco:publish",
-    "cli:lint": "node --check bin/maco.mjs && node --check scripts/run-playground.mjs",
+    "cli:lint": "node --check bin/maco.mjs && node --check scripts/handoff-maco.mjs && node --check scripts/run-playground.mjs",
     "cli:test": "node --test test/cli.test.mjs",
     "verify": "pnpm typecheck && pnpm test && pnpm cli:lint && pnpm cli:test",
     "prepack": "pnpm verify",

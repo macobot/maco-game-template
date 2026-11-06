@@ -24,7 +24,7 @@ pnpm maco:publish
 }
 ```
 
-Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck`, `test`, `build`, rồi tạo ZIP. Bộ kiểm tra và đóng gói được cài kèm trong `@macobot/maco-cli`; project game không cần có `scripts/zip-maco.mjs`.
+Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck`, `test`, `build`, tạo ZIP, rồi đọc `maco.key`, `version` và `README.md` trong project game để mở form `/developer/game-submissions` với metadata đã điền sẵn. Nội dung README được truyền qua URL fragment `#readme=…`, để form frontend có thể đọc mà nội dung không đi theo HTTP request; vẫn chỉ ghi thông tin công khai, không chứa token hay thông tin nhạy cảm. Bộ kiểm tra, đóng gói và handoff được cài kèm trong `@macobot/maco-cli`; project game không cần có các script này.
 
 Với npm, dùng `npm i -D @macobot/maco-cli`, `npx maco setup`, và `npm run maco:publish`.
 
@@ -38,7 +38,7 @@ Template để làm một web game và đưa lên [Maco](https://macogame.com) d
 
 Bridge `maco-game/v1` đã có sẵn, nên Maco nhận ra game đã sẵn sàng và truyền ngôn ngữ của người chơi vào game.
 
-> Maco không nhận game qua npm package. `maco:publish` chỉ kiểm tra, build và tạo ZIP để upload như bên dưới.
+> Maco không nhận game qua npm package. `maco:publish` kiểm tra, build, tạo ZIP và mở form upload; bạn vẫn tự chọn file ZIP rồi gửi form.
 
 ## Bắt đầu
 
@@ -78,6 +78,8 @@ pnpm maco:zip
 ```
 
 `pnpm maco:zip` dừng với lỗi nếu bản build vi phạm một quy tắc mà máy chủ Maco cũng kiểm tra: thiếu `index.html` ở gốc, đuôi file không được phép, symlink, quá 1.000 file, quá 150 MB sau giải nén hoặc zip quá 50 MB, game key hay version không hợp lệ. Khi thành công, lệnh in ra game key và version để nhập vào form upload.
+
+`pnpm maco:publish` chạy trọn luồng kiểm tra → build → zip, sau đó mở `/developer/game-submissions` với **game key**, **version** và nội dung **README.md** của project. Chọn file trong `maco-upload/` vừa được tạo rồi gửi form.
 
 Mỗi version là bất biến: muốn sửa, tăng `version` trong `package.json`, build và zip lại. Quản trị viên Maco xét duyệt từng version trước khi phát hành.
 
