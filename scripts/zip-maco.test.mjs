@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   MAX_FILES,
   collectArtifactFiles,
+  gameKeyFromName,
   gameKeyProblem,
   hasBridge,
   submissionFormUrl,
@@ -24,6 +25,23 @@ describe('gameKeyProblem', () => {
     'r-123', '123e4567-e89b-12d3-a456-426614174000',
   ])('rejects %s', (key) => {
     expect(gameKeyProblem(key)).toEqual(expect.any(String))
+  })
+})
+
+describe('gameKeyFromName', () => {
+  it.each([
+    ['@lukhaiminh/shuttle-blitz', 'shuttle-blitz'],
+    ['My_Game', 'my-game'],
+    ['Trường Gà Nhí', 'truong-ga-nhi'],
+    ['--space  runner 2--', 'space-runner-2'],
+    [`@scope/${'a'.repeat(39)}-b`, 'a'.repeat(39)],
+  ])('turns %s into %s', (name, key) => {
+    expect(gameKeyFromName(name)).toBe(key)
+    expect(gameKeyProblem(key)).toBeUndefined()
+  })
+
+  it('can still produce a key that gameKeyProblem refuses', () => {
+    expect(gameKeyProblem(gameKeyFromName('@scope/api'))).toEqual(expect.any(String))
   })
 })
 

@@ -54,6 +54,23 @@ export function submissionFormUrl(domain = process.env.MACOGAME_DOMAIN ?? DEFAUL
   }
 }
 
+/**
+ * Turns a package `name` into a game key candidate: drops an npm `@scope/`, folds accents and case, and joins the
+ * remaining letters and digits with single hyphens. The result can still be invalid (reserved, too short), so check
+ * it with `gameKeyProblem`.
+ */
+export function gameKeyFromName(name) {
+  return name
+    .replace(/^@[^/]+\//, '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/đ/gi, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, GAME_KEY_MAX_LENGTH)
+    .replace(/^-+|-+$/g, '')
+}
+
 /** Returns why `key` cannot name an uploaded game, or `undefined` when it is valid. */
 export function gameKeyProblem(key) {
   if (typeof key !== 'string' || key.length === 0) {
