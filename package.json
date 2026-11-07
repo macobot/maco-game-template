@@ -1,6 +1,6 @@
 {
   "name": "@macobot/maco-cli",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "CLI for validating and packaging Maco iframe game upload kits.",
   "keywords": [
     "maco",
