@@ -93,13 +93,13 @@ Chi tiết về giới hạn, đuôi file được phép, version và ghi chú c
 
 ## Phát hành CLI (maintainers)
 
-Package npm được phát hành từ root repository. Trước khi phát hành, đăng nhập npm và chạy:
+Package npm được phát hành từ root repository. Mỗi version npm là bất biến. Sau khi đăng nhập npm, chạy một lệnh sau để tăng patch version, kiểm tra, publish và push commit/tag:
 
 ```bash
 pnpm run publish:cli
 ```
 
-Lệnh này chạy kiểm tra kiểu, test game template, test CLI và `npm publish --access public`.
+`pnpm run publish:cli` chạy lần lượt `pnpm version patch`, kiểm tra kiểu/test, `npm publish --access public`, rồi `git push --follow-tags`. Version mới được tạo Git tag (ví dụ `0.2.5` → `0.2.6`); tag chỉ được push sau khi npm publish thành công. Dùng `pnpm version minor` hoặc `pnpm version major` trực tiếp khi thay đổi có phạm vi lớn hơn.
 
 ## Engine khác (Unity, Godot, HTML thuần)
 
