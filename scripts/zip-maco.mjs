@@ -17,6 +17,9 @@ export const MAX_ZIP_BYTES = 52_428_800
 export const MAX_UNCOMPRESSED_BYTES = 157_286_400
 export const MAX_FILES = 1000
 export const MAX_PATH_BYTES = 512
+// The upload form keeps at most this much README (`ARTIFACT_README_MAX_CHARS` in maco-games
+// `shared/game-submissions/artifact-submission.ts`).
+export const MAX_README_CHARS = 20_000
 
 export const ARTIFACT_EXTENSIONS = [
   'html', 'htm', 'js', 'mjs', 'css', 'json', 'map', 'wasm', 'txt', 'xml', 'csv',
@@ -55,6 +58,41 @@ export function submissionFormUrl(domain = process.env.MACOGAME_DOMAIN ?? DEFAUL
   } catch {
     throw new ArtifactCheckError('MACOGAME_DOMAIN must be an HTTP(S) origin, for example https://macogame.com')
   }
+}
+
+/**
+ * Adds the engine-neutral bridge to an artefact that does not already include the Maco protocol.
+ *
+ * This intentionally happens after the game's build: the CLI cannot safely rewrite an arbitrary
+ * TypeScript entry point or guess its `mountGame` API, but every web build has an `index.html` that
+ * can load this small handshake bridge. It prevents the player from timing out while leaving games
+ * that already use the source-level Vite bridge untouched.
+ */
+export async function ensureArtifactBridge(root) {
+  const distDir = path.join(root, 'dist')
+  const { files } = await collectArtifactFiles(distDir)
+  if (await hasBridge(files)) return false
+
+  const indexPath = path.join(distDir, 'index.html')
+  const html = await readFile(indexPath, 'utf8')
+  // Keep the bridge aligned with a local/staging MACOGAME_DOMAIN as well as production.
+  const hostOrigin = new URL(submissionFormUrl()).origin
+  const source = (await readFile(classicBridgePath, 'utf8')).replaceAll(DEFAULT_MACOGAME_DOMAIN, hostOrigin)
+  await writeFile(path.join(distDir, CLASSIC_BRIDGE_FILE), source)
+
+  // Loading this synchronously in <head> lets it hear the host handshake before the game starts.
+  // Re-running `maco zip` does not duplicate the tag, even if a previous run was interrupted.
+  if (!html.includes(CLASSIC_BRIDGE_FILE)) {
+    const headClose = /<\/head\s*>/i
+    const bodyClose = /<\/body\s*>/i
+    const nextHtml = headClose.test(html)
+      ? html.replace(headClose, `  ${CLASSIC_BRIDGE_TAG}\n$&`)
+      : bodyClose.test(html)
+        ? html.replace(bodyClose, `  ${CLASSIC_BRIDGE_TAG}\n$&`)
+        : `${html}\n${CLASSIC_BRIDGE_TAG}\n`
+    await writeFile(indexPath, nextHtml)
+  }
+  return true
 }
 
 /**
