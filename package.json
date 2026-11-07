@@ -48,8 +48,8 @@
     "playground:maco:validate": "node scripts/run-playground.mjs maco:validate",
     "playground:maco:zip": "node scripts/run-playground.mjs maco:zip",
     "playground:maco:publish": "node scripts/run-playground.mjs maco:publish",
-    "cli:lint": "node --check bin/maco.mjs && node --check scripts/handoff-maco.mjs && node --check scripts/run-playground.mjs",
-    "cli:test": "node --test test/cli.test.mjs",
+    "cli:lint": "node --check bin/maco.mjs && node --check scripts/handoff-maco.mjs && node --check scripts/run-cli-tests.mjs && node --check scripts/run-playground.mjs",
+    "cli:test": "node scripts/run-cli-tests.mjs",
     "verify": "pnpm typecheck && pnpm test && pnpm cli:lint && pnpm cli:test",
     "prepack": "pnpm verify",
     "publish:cli": "pnpm verify && npm publish --access public"

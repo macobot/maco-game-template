@@ -96,6 +96,9 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'happy-dom',
+      // A consumer of this template may remove the starter tests. Keep `pnpm test`
+      // and publish verification successful in that case.
+      passWithNoTests: true,
     },
   }
 })
