@@ -189,8 +189,7 @@
     }
   });
 
-  // A post whose target origin does not match the parent is dropped, so only a Maco parent hears this.
-  for (var i = 0; i < HOST_ORIGINS.length; i++) {
-    window.parent.postMessage({ protocol: PROTOCOL, type: 'ready' }, HOST_ORIGINS[i]);
-  }
+  // `ready` contains no user data or authority. The host validates event.origin, while this bridge accepts
+  // subsequent messages only from an allow-listed host. One wildcard discovery post avoids origin-mismatch errors.
+  window.parent.postMessage({ protocol: PROTOCOL, type: 'ready' }, '*');
 })();
