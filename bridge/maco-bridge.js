@@ -11,6 +11,7 @@
  *   MacoBridge.on('locale', function (locale) { setLanguage(locale) })
  *   MacoBridge.on('input', function (input) { applyHostInput(input) })
  *   var ticket = await MacoBridge.requestRoomTicket(roomCode)
+ *   var matchTicket = await MacoBridge.requestMatchTicket()
  *   var voiceTicket = await MacoBridge.requestVoiceTicket(roomCode)
  *
  * `request*Ticket` deliberately only asks the embedding Maco page. It never
@@ -97,7 +98,7 @@
       && typeof ticket.driver === 'string' && ticket.driver.length > 0 && ticket.driver.length <= 32;
   }
 
-  function requestTicket(room, channel) {
+  function requestTicket(room, channel, matchmake) {
     if (hostOrigin === undefined) return Promise.reject(ticketError('Maco host handshake has not completed'));
     if (room !== null && (typeof room !== 'string' || room.length === 0 || room.length > 32)) {
       return Promise.reject(ticketError('Room code must be null or a string up to 32 characters'));
@@ -115,7 +116,7 @@
       window.parent.postMessage({
         protocol: PROTOCOL,
         type: 'online-ticket-request',
-        payload: { id: id, room: room, channel: channel }
+        payload: Object.assign({ id: id, room: room, channel: channel }, matchmake ? { matchmake: true } : {})
       }, hostOrigin);
     });
   }
@@ -134,9 +135,11 @@
       };
     },
     /** Gets a fresh gameplay room ticket. `null` creates a room; a code joins one. */
-    requestRoomTicket: function (room) { return requestTicket(room === undefined ? null : room, 'game'); },
+    requestRoomTicket: function (room) { return requestTicket(room === undefined ? null : room, 'game', false); },
+    /** Joins the host-managed automatic queue for a two-player RTC game. */
+    requestMatchTicket: function () { return requestTicket(null, 'game', true); },
     /** Gets a fresh, separate RTC ticket for optional room voice chat. */
-    requestVoiceTicket: function (room) { return requestTicket(room, 'voice'); }
+    requestVoiceTicket: function (room) { return requestTicket(room, 'voice', false); }
   };
 
   window.addEventListener('message', function (event) {
