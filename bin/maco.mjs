@@ -5,7 +5,8 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { gameKeyFromName, gameKeyProblem } from '../scripts/zip-maco.mjs'
+import { isDeepStrictEqual } from 'node:util'
+import { gameKeyFromName, gameKeyProblem, nextVersion, versionProblem } from '../scripts/zip-maco.mjs'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // The template ships this key; a project made from it has not chosen its own key yet.
@@ -25,7 +26,8 @@ function command(name, args) {
 function readProjectManifest() {
   const packagePath = path.resolve('package.json')
   if (!existsSync(packagePath)) fail('Không tìm thấy package.json ở root project.')
-  return { packagePath, packageJson: JSON.parse(readFileSync(packagePath, 'utf8')) }
+  const source = readFileSync(packagePath, 'utf8')
+  return { packagePath, source, packageJson: JSON.parse(source) }
 }
 
 function runProjectScript(name) {
@@ -86,6 +88,43 @@ function setup() {
     : `✓ Đặt maco.key thành ${key}. Key là vĩnh viễn sau lần upload đầu tiên; sửa trong package.json nếu muốn key khác.`)
 }
 
+/**
+ * Replaces only the value of the top-level `version`, so the developer's indentation and key order survive and the
+ * change to commit is one line. Refuses when the first `"version"` in the text is not the top-level one.
+ */
+function withVersion(source, packageJson, version) {
+  const rewritten = source.replace(/("version"\s*:\s*)"[^"]*"/, `$1${JSON.stringify(version)}`)
+  let parsed
+  try {
+    parsed = JSON.parse(rewritten)
+  } catch {
+    parsed = undefined
+  }
+  if (!isDeepStrictEqual(parsed, { ...packageJson, version })) {
+    fail(`Không tự tăng được version: khóa "version" đầu tiên trong package.json không phải version của game. Đặt "version" thành ${version} rồi chạy lại.`)
+  }
+  return rewritten
+}
+
+/**
+ * Moves `version` past every version that already has a zip in `maco-upload/`, because Maco accepts each version of
+ * a key once. A version without a zip is the one the developer chose, so it is kept.
+ */
+function bumpPackagedVersion() {
+  const { packagePath, source, packageJson } = readProjectManifest()
+  const key = packageJson.maco?.key
+  const current = packageJson.version
+  // The zip step reports an invalid key or version, as before.
+  if (gameKeyProblem(key) || versionProblem(current)) return
+  const zipPath = (version) => path.join('maco-upload', `${key}-${version}.zip`)
+  if (!existsSync(zipPath(current))) return
+
+  let next = nextVersion(current)
+  while (existsSync(zipPath(next))) next = nextVersion(next)
+  writeFileSync(packagePath, withVersion(source, packageJson, next))
+  console.log(`\n✓ Đã có ${zipPath(current)}; tăng version ${current} → ${next} trong package.json. Nhớ commit package.json.`)
+}
+
 function publish() {
   const { packageJson } = readProjectManifest()
   const scripts = packageJson.scripts ?? {}
@@ -95,6 +134,8 @@ function publish() {
     if (scripts[name]) runProjectScript(name)
     else console.log(`Bỏ qua "${name}": package.json không có script này.`)
   }
+  // Before the build, so a game that embeds its version at build time gets the new one.
+  bumpPackagedVersion()
   runProjectScript('build')
   command(process.execPath, [zipScript()])
   command(process.execPath, [handoffScript()])
