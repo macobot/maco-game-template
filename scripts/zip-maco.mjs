@@ -146,6 +146,25 @@ export function versionProblem(version) {
   return undefined
 }
 
+const NUMERIC_IDENTIFIER = /^(?:0|[1-9]\d*)$/
+
+/**
+ * The version after a valid `version`, as `npm version patch` writes it for a release (`1.0.0` → `1.0.1`) and
+ * `npm version prerelease` for a pre-release (`1.0.0-beta.1` → `1.0.0-beta.2`, `1.0.0-rc` → `1.0.0-rc.0`).
+ */
+export function nextVersion(version) {
+  const dash = version.indexOf('-')
+  if (dash === -1) {
+    const [major, minor, patch] = version.split('.')
+    return `${major}.${minor}.${BigInt(patch) + 1n}`
+  }
+  const identifiers = version.slice(dash + 1).split('.')
+  const last = identifiers.length - 1
+  if (NUMERIC_IDENTIFIER.test(identifiers[last])) identifiers[last] = String(BigInt(identifiers[last]) + 1n)
+  else identifiers.push('0')
+  return `${version.slice(0, dash)}-${identifiers.join('.')}`
+}
+
 function extensionOf(name) {
   const dot = name.lastIndexOf('.')
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''

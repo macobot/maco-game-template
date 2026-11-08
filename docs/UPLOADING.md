@@ -56,7 +56,13 @@ Key là **vĩnh viễn** sau lần duyệt đầu tiên.
 
 ## Version
 
-`version` trong `package.json` theo semver, ví dụ `1.0.0` hoặc `1.0.0-beta.1`, **không** có phần build metadata `+...`. Mỗi version là bất biến: muốn sửa thì tăng version rồi upload lại. Một lượt upload bị lỗi, hết hạn hoặc bị hủy sẽ giải phóng version đó để bạn thử lại.
+`version` trong `package.json` theo semver, ví dụ `1.0.0` hoặc `1.0.0-beta.1`, **không** có phần build metadata `+...`. Mỗi version là bất biến: muốn sửa thì upload một version mới. Một lượt upload bị lỗi, hết hạn hoặc bị hủy sẽ giải phóng version đó để bạn thử lại.
+
+`maco publish` tự chọn version mới. Nếu `maco-upload/<key>-<version>.zip` của version hiện tại đã có, lệnh ghi version kế tiếp chưa có zip vào `package.json` trước khi build, theo cách `npm version patch` (`1.0.0` → `1.0.1`) hoặc `npm version prerelease` (`1.0.0-beta.1` → `1.0.0-beta.2`, `1.0.0-rc` → `1.0.0-rc.0`). Chỉ dòng `version` thay đổi, nên commit `package.json` cùng code. Lệnh không tạo git commit hay tag.
+
+- Version chưa có zip được giữ nguyên, nên lần upload đầu và version minor/major bạn tự đặt dùng đúng số đó.
+- `maco zip` và `maco validate` không đổi version. Muốn upload lại cùng version sau khi lượt trước bị lỗi hoặc hủy, chọn lại zip cũ trong `maco-upload/` hoặc chạy `maco zip`.
+- `maco-upload/` không nằm trong git, nên ở bản clone mới form có thể báo version đã được gửi. Chạy lại `maco publish`: zip vừa tạo làm lệnh tăng version.
 
 ## Bridge
 

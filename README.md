@@ -87,7 +87,7 @@ pnpm maco:zip
 
 `pnpm maco:publish` chạy trọn luồng kiểm tra → build → zip, sau đó mở `/developer/game-submissions` với **game key**, **version** và nội dung **README.md** của project. Chọn file trong `maco-upload/` vừa được tạo rồi gửi form.
 
-Mỗi version là bất biến: muốn sửa, tăng `version` trong `package.json`, build và zip lại. Quản trị viên Maco xét duyệt từng version trước khi phát hành.
+Mỗi version là bất biến, nhưng bạn không cần tự tăng `version` cho mỗi lần upload. Nếu `maco-upload/<key>-<version>.zip` của version hiện tại đã có, `pnpm maco:publish` ghi version kế tiếp vào `package.json` trước khi build (`1.0.0` → `1.0.1`, `1.0.0-beta.1` → `1.0.0-beta.2`), rồi in ra để bạn commit. Muốn lên minor/major, đặt `version` mới bằng tay; version chưa có zip được giữ nguyên. `pnpm maco:zip` không bao giờ đổi version. Quản trị viên Maco xét duyệt từng version trước khi phát hành.
 
 Chi tiết về giới hạn, đuôi file được phép, version và ghi chú cho từng engine: [docs/UPLOADING.md](docs/UPLOADING.md). Hướng dẫn đầy đủ trên Maco: [Cách đưa game lên Maco](https://macogame.com/huong-dan/dua-game-len-maco).
 
