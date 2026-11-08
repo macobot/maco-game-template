@@ -10,7 +10,7 @@
     "iframe"
   ],
   "bin": {
-    "maco": "./bin/maco.mjs"
+    "maco": "bin/maco.mjs"
   },
   "files": [
     "bin",
