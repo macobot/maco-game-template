@@ -64,6 +64,10 @@ Key là **vĩnh viễn** sau lần duyệt đầu tiên.
 - `maco zip` và `maco validate` không đổi version. Muốn upload lại cùng version sau khi lượt trước bị lỗi hoặc hủy, chọn lại zip cũ trong `maco-upload/` hoặc chạy `maco zip`.
 - `maco-upload/` không nằm trong git, nên ở bản clone mới form có thể báo version đã được gửi. Chạy lại `maco publish`: zip vừa tạo làm lệnh tăng version.
 
+## Điểm số
+
+Muốn gửi điểm cho Maco, khai báo `"scoring": { "maxScore": 1000, "order": "desc" }` trong `maco` của `package.json` và gọi `submitScore(score)` khi lượt chơi kết thúc; xem [Báo điểm (scoring)](../README.md#báo-điểm-scoring). `maco zip` ghi khai báo này vào `maco.json` ở gốc zip, nên bản build không được tự có file `maco.json` ở gốc.
+
 ## Bridge
 
 Maco gửi `host-ready` vào iframe, chờ game trả lời `ready`, rồi gửi `init` kèm ngôn ngữ; mỗi lần người chơi đổi ngôn ngữ, Maco gửi `locale`. Giao thức là `maco-game/v1`. Nếu không nhận được `ready` trong 10 giây, Maco hiển thị "failed" dù game vẫn chạy.

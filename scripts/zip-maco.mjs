@@ -42,6 +42,11 @@ const BRIDGE_SCAN_EXTENSIONS = new Set(['html', 'htm', 'js', 'mjs'])
 const DEFAULT_MACOGAME_DOMAIN = 'https://macogame.com'
 const CLASSIC_BRIDGE_FILE = 'maco-bridge.js'
 const CLASSIC_BRIDGE_TAG = '<script data-maco-bridge="classic" src="./maco-bridge.js"></script>'
+/** The zip-root file that carries `maco.scoring` to the Maco server; the CLI owns this name. */
+export const SCORING_MANIFEST_FILE = 'maco.json'
+export const MAX_SCORING_MAX_SCORE = 1_000_000_000
+const SCORING_ORDERS = ['desc', 'asc']
+const SCORING_KEYS = ['maxScore', 'order']
 const classicBridgePath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bridge', CLASSIC_BRIDGE_FILE)
 
 export class ArtifactCheckError extends Error {
@@ -144,6 +149,107 @@ export function versionProblem(version) {
     return `version "${version}" must be semver, for example 1.0.0 or 1.0.0-beta.1`
   }
   return undefined
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * Returns why `scoring` (package.json `maco.scoring`) cannot be uploaded, or `undefined` when it is valid or absent.
+ * Absent means the game reports no score.
+ */
+export function scoringProblem(scoring) {
+  if (scoring === undefined) return undefined
+  if (!isPlainObject(scoring)) {
+    return 'package.json "maco.scoring" must be an object, for example { "maxScore": 1000, "order": "desc" }'
+  }
+  const unknownKeys = Object.keys(scoring).filter(key => !SCORING_KEYS.includes(key))
+  if (unknownKeys.length > 0) {
+    return `package.json "maco.scoring" has unknown key${unknownKeys.length > 1 ? 's' : ''} ${unknownKeys.map(key => `"${key}"`).join(', ')}; allowed: ${SCORING_KEYS.join(', ')}`
+  }
+  const { maxScore, order } = scoring
+  if (!Number.isInteger(maxScore) || maxScore < 1 || maxScore > MAX_SCORING_MAX_SCORE) {
+    return `package.json "maco.scoring.maxScore" must be an integer from 1 to ${MAX_SCORING_MAX_SCORE}`
+  }
+  if (order !== undefined && !SCORING_ORDERS.includes(order)) {
+    return `package.json "maco.scoring.order" must be ${SCORING_ORDERS.map(value => `"${value}"`).join(' or ')} (default "desc")`
+  }
+  return undefined
+}
+
+/** The exact `maco.json` text the CLI writes for a valid `scoring`, with `order` always explicit. */
+export function scoringManifestText(scoring) {
+  return JSON.stringify({ scoring: { maxScore: scoring.maxScore, order: scoring.order ?? 'desc' } })
+}
+
+/** Whether `text` is exactly a `maco.json` that `scoringManifestText` could have written. */
+function isCliScoringManifest(text) {
+  let parsed
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return false
+  }
+  return isPlainObject(parsed) && Object.keys(parsed).length === 1 && isPlainObject(parsed.scoring)
+    && typeof parsed.scoring.order === 'string' && scoringProblem(parsed.scoring) === undefined
+    && text === scoringManifestText(parsed.scoring)
+}
+
+function reservedScoringManifestError(name) {
+  return new ArtifactCheckError(`dist/${name} is reserved for the scoring declaration the CLI writes to dist/${SCORING_MANIFEST_FILE} from package.json "maco.scoring"; rename your file`)
+}
+
+/**
+ * Reads `dist/maco.json` and returns its text, `undefined` when there is none, and throws when the file is not one
+ * the CLI wrote: the CLI owns that zip-root name for the scoring declaration. A name that differs only by case
+ * (`Maco.json`) is refused too, because a case-insensitive disk would read it as `maco.json` while the zip keeps
+ * the other case and the server never sees the scoring.
+ */
+async function readOwnedScoringManifest(distDir) {
+  const entries = await readdir(distDir).catch((error) => {
+    if (error.code === 'ENOENT') return []
+    throw error
+  })
+  const variant = entries.find(name => name !== SCORING_MANIFEST_FILE && name.normalize('NFC').toLowerCase() === SCORING_MANIFEST_FILE)
+  if (variant !== undefined) throw reservedScoringManifestError(variant)
+  if (!entries.includes(SCORING_MANIFEST_FILE)) return undefined
+
+  const manifestPath = path.join(distDir, SCORING_MANIFEST_FILE)
+  const entry = await lstat(manifestPath)
+  const text = entry.isFile() ? await readFile(manifestPath, 'utf8') : undefined
+  if (text === undefined || !isCliScoringManifest(text)) throw reservedScoringManifestError(SCORING_MANIFEST_FILE)
+  return text
+}
+
+/** Reads package.json and throws the first key, version or scoring problem. */
+async function readProjectManifest(root) {
+  const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+  const key = manifest.maco?.key
+  const version = manifest.version
+  const scoring = isPlainObject(manifest.maco) ? manifest.maco.scoring : undefined
+  const problem = gameKeyProblem(key) ?? versionProblem(version) ?? scoringProblem(scoring)
+  if (problem) {
+    throw new ArtifactCheckError(problem)
+  }
+  return { key, version, scoring }
+}
+
+/**
+ * Makes `dist/maco.json` match package.json `maco.scoring`: writes it when scoring is declared, and removes a copy
+ * the CLI wrote earlier when it is not. Returns the written scoring, or `undefined` when the game declares none.
+ */
+export async function syncScoringManifest(root, scoring) {
+  const distDir = path.join(root, 'dist')
+  const current = await readOwnedScoringManifest(distDir)
+  const manifestPath = path.join(distDir, SCORING_MANIFEST_FILE)
+  if (scoring === undefined) {
+    if (current !== undefined) await rm(manifestPath)
+    return undefined
+  }
+  const text = scoringManifestText(scoring)
+  if (current !== text) await writeFile(manifestPath, text)
+  return JSON.parse(text).scoring
 }
 
 const NUMERIC_IDENTIFIER = /^(?:0|[1-9]\d*)$/
@@ -280,30 +386,39 @@ export async function writeArtifactZip(files, outFile) {
 }
 
 export async function validateProject(root) {
-  const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
-  const key = manifest.maco?.key
-  const version = manifest.version
-  const problem = gameKeyProblem(key) ?? versionProblem(version)
-  if (problem) {
-    throw new ArtifactCheckError(problem)
-  }
+  return checkProjectArtifact(root, await readProjectManifest(root))
+}
 
-  const { files, totalBytes } = await collectArtifactFiles(path.join(root, 'dist'))
+/** Checks `dist/` against the rules the server enforces, for an already validated `package.json`. */
+async function checkProjectArtifact(root, { key, version, scoring }) {
+  const distDir = path.join(root, 'dist')
+  const { files, totalBytes } = await collectArtifactFiles(distDir)
+  await readOwnedScoringManifest(distDir)
   const bridgeFound = await hasBridge(files)
   if (!bridgeFound) {
     console.warn(`warning: no .html, .js or .mjs file contains "${BRIDGE_PROTOCOL}"; maco zip/publish will add the classic iframe bridge to dist/`)
   }
 
-  return { key, version, files, totalBytes, bridgeFound }
+  return { key, version, scoring, files, totalBytes, bridgeFound }
 }
 
 export async function zipProject(root) {
+  // First, so an invalid key, version or scoring leaves dist/ untouched.
+  const project = await readProjectManifest(root)
   const bridgeAdded = await ensureArtifactBridge(root)
-  const { key, version, files, totalBytes } = await validateProject(root)
+  // Before checking dist/, so dist/maco.json is checked and packed with the rest of it.
+  const scoring = await syncScoringManifest(root, project.scoring)
+  const { key, version, files, totalBytes } = await checkProjectArtifact(root, project)
   const outFile = path.join(root, 'maco-upload', `${key}-${version}.zip`)
   const zipBytes = await writeArtifactZip(files, outFile)
 
-  return { key, version, files, totalBytes, outFile, zipBytes, bridgeAdded }
+  return { key, version, scoring, files, totalBytes, outFile, zipBytes, bridgeAdded }
+}
+
+function describeScoring(scoring) {
+  return scoring === undefined
+    ? 'no maco.scoring in package.json; the game reports no score.'
+    : `maxScore ${scoring.maxScore}, order ${scoring.order ?? 'desc'}.`
 }
 
 async function main() {
@@ -317,14 +432,16 @@ async function main() {
   }
 
   if (validateOnly) {
-    const { key, version, files, totalBytes } = await validateProject(root)
+    const { key, version, scoring, files, totalBytes } = await validateProject(root)
     console.log(`Validated ${key}@${version}: ${files.length} files, ${totalBytes} bytes uncompressed.`)
+    console.log(`Scoring: ${describeScoring(scoring)}`)
     return
   }
 
-  const { key, version, files, totalBytes, outFile, zipBytes, bridgeAdded } = await zipProject(root)
+  const { key, version, scoring, files, totalBytes, outFile, zipBytes, bridgeAdded } = await zipProject(root)
 
   if (bridgeAdded) console.log(`Added ${CLASSIC_BRIDGE_FILE} to dist/ so the game can complete the Maco iframe handshake.`)
+  if (scoring !== undefined) console.log(`Wrote dist/${SCORING_MANIFEST_FILE} for scoring: ${describeScoring(scoring)}`)
   console.log(`Wrote ${path.relative(root, outFile)}: ${files.length} files, ${totalBytes} bytes uncompressed, ${zipBytes} bytes zipped.`)
   console.log(`Upload it at ${submissionFormUrl()} with:`)
   console.log(`  Game key: ${key}`)
