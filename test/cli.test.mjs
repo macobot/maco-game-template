@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { nextVersion } from '../scripts/zip-maco.mjs'
+import { nextVersion, scoringProblem } from '../scripts/zip-maco.mjs'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -371,5 +371,179 @@ test('zip never changes the version, even when its zip already exists', () => {
 
     assert.equal(second.status, 0, second.stderr)
     assert.equal(manifest().version, '1.2.3')
+  })
+})
+
+/** Lists the entry names of a zip from its central directory. */
+function zipEntryNames(zipFile) {
+  const zip = readFileSync(zipFile)
+  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+  const count = zip.readUInt16LE(end + 10)
+  let offset = zip.readUInt32LE(end + 16)
+  const names = []
+  for (let index = 0; index < count; index++) {
+    const nameLength = zip.readUInt16LE(offset + 28)
+    const extraLength = zip.readUInt16LE(offset + 30)
+    const commentLength = zip.readUInt16LE(offset + 32)
+    names.push(zip.toString('utf8', offset + 46, offset + 46 + nameLength))
+    offset += 46 + nameLength + extraLength + commentLength
+  }
+  return names
+}
+
+/** A project with a built `dist/index.html` and `maco.scoring` set to `scoring` (left out when `undefined`). */
+function withScoringProject(scoring, body) {
+  const maco = scoring === undefined ? { key: 'test-game' } : { key: 'test-game', scoring }
+  return withProject({ name: 'test-game', version: '1.2.3', maco }, (projectRoot) => {
+    mkdirSync(path.join(projectRoot, 'dist'))
+    writeFileSync(path.join(projectRoot, 'dist', 'index.html'), '<p>game</p>')
+    const setScoring = (next) => {
+      const manifestPath = path.join(projectRoot, 'package.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      if (next === undefined) delete manifest.maco.scoring
+      else manifest.maco.scoring = next
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    }
+    const scoringManifest = path.join(projectRoot, 'dist', 'maco.json')
+    const zipFile = path.join(projectRoot, 'maco-upload', 'test-game-1.2.3.zip')
+    return body({ projectRoot, setScoring, scoringManifest, zipFile })
+  })
+}
+
+test('scoringProblem accepts a valid or absent declaration', () => {
+  assert.equal(scoringProblem(undefined), undefined)
+  assert.equal(scoringProblem({ maxScore: 1 }), undefined)
+  assert.equal(scoringProblem({ maxScore: 1_000_000_000, order: 'asc' }), undefined)
+  assert.equal(scoringProblem({ maxScore: 1000, order: 'desc' }), undefined)
+})
+
+test('scoringProblem explains every invalid declaration', () => {
+  for (const scoring of [null, [], 'desc', 1000]) {
+    assert.match(scoringProblem(scoring), /"maco\.scoring" must be an object/)
+  }
+  assert.match(scoringProblem({ maxScore: 1000, min: 0 }), /unknown key "min"; allowed: maxScore, order/)
+  assert.match(scoringProblem({ maxScore: 1000, a: 1, b: 2 }), /unknown keys "a", "b"/)
+  for (const maxScore of [undefined, 0, -1, 1.5, 1_000_000_001, '1000', Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.match(scoringProblem({ maxScore }), /"maco\.scoring\.maxScore" must be an integer from 1 to 1000000000/)
+  }
+  for (const order of ['up', 'DESC', null, 1]) {
+    assert.match(scoringProblem({ maxScore: 1000, order }), /"maco\.scoring\.order" must be "desc" or "asc"/)
+  }
+})
+
+test('zip writes dist/maco.json with an explicit order and packs it at the zip root', () => {
+  withScoringProject({ maxScore: 1000 }, ({ projectRoot, scoringManifest, zipFile }) => {
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(readFileSync(scoringManifest, 'utf8'), '{"scoring":{"maxScore":1000,"order":"desc"}}')
+    assert.match(result.stdout, /Wrote dist\/maco\.json for scoring: maxScore 1000, order desc\./)
+    assert.deepEqual(zipEntryNames(zipFile).sort(), ['index.html', 'maco-bridge.js', 'maco.json'])
+  })
+})
+
+test('zip rewrites dist/maco.json when the declaration changes and removes it when scoring is dropped', () => {
+  withScoringProject({ maxScore: 1000, order: 'desc' }, ({ projectRoot, setScoring, scoringManifest, zipFile }) => {
+    assert.equal(run(['zip'], projectRoot).status, 0)
+
+    setScoring({ maxScore: 90, order: 'asc' })
+    const changed = run(['zip'], projectRoot)
+    assert.equal(changed.status, 0, changed.stderr)
+    assert.equal(readFileSync(scoringManifest, 'utf8'), '{"scoring":{"maxScore":90,"order":"asc"}}')
+
+    setScoring(undefined)
+    const dropped = run(['zip'], projectRoot)
+    assert.equal(dropped.status, 0, dropped.stderr)
+    assert.equal(existsSync(scoringManifest), false)
+    assert.doesNotMatch(dropped.stdout, /maco\.json/)
+    assert.equal(zipEntryNames(zipFile).includes('maco.json'), false)
+  })
+})
+
+test('zip without scoring writes no maco.json', () => {
+  withScoringProject(undefined, ({ projectRoot, scoringManifest, zipFile }) => {
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(existsSync(scoringManifest), false)
+    assert.equal(zipEntryNames(zipFile).includes('maco.json'), false)
+  })
+})
+
+test('zip refuses a dist/maco.json the CLI did not write and leaves it in place', () => {
+  for (const [scoring, content] of [
+    [{ maxScore: 1000 }, '{"name":"my level data"}'],
+    [undefined, '{"scoring":{"maxScore":1000,"order":"desc"}}\n'],
+    [undefined, '{"scoring":{"maxScore":1000}}'],
+    [undefined, 'not json'],
+  ]) {
+    withScoringProject(scoring, ({ projectRoot, scoringManifest, zipFile }) => {
+      writeFileSync(scoringManifest, content)
+
+      const result = run(['zip'], projectRoot)
+
+      assert.equal(result.status, 1, content)
+      assert.match(result.stderr, /maco:zip: dist\/maco\.json is reserved for the scoring declaration/)
+      assert.equal(readFileSync(scoringManifest, 'utf8'), content)
+      assert.equal(existsSync(zipFile), false)
+    })
+  }
+})
+
+test('zip refuses an invalid scoring declaration before writing anything', () => {
+  withScoringProject({ maxScore: 0 }, ({ projectRoot, scoringManifest, zipFile }) => {
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /maco:zip: package\.json "maco\.scoring\.maxScore" must be an integer from 1 to 1000000000/)
+    assert.equal(existsSync(scoringManifest), false)
+    assert.equal(existsSync(zipFile), false)
+  })
+})
+
+test('validate checks the scoring declaration without writing dist/maco.json', () => {
+  withScoringProject({ maxScore: 500, order: 'asc' }, ({ projectRoot, scoringManifest }) => {
+    const result = run(['validate'], projectRoot)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /Scoring: maxScore 500, order asc\./)
+    assert.equal(existsSync(scoringManifest), false)
+  })
+  withScoringProject(undefined, ({ projectRoot }) => {
+    const result = run(['validate'], projectRoot)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /Scoring: no maco\.scoring in package\.json/)
+  })
+})
+
+test('validate refuses an invalid scoring declaration and a foreign dist/maco.json', () => {
+  withScoringProject({ maxScore: 1000, order: 'desc', extra: true }, ({ projectRoot }) => {
+    const result = run(['validate'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /unknown key "extra"; allowed: maxScore, order/)
+  })
+  withScoringProject({ maxScore: 1000, order: 'up' }, ({ projectRoot }) => {
+    const result = run(['validate'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /"maco\.scoring\.order" must be "desc" or "asc"/)
+  })
+  withScoringProject({ maxScore: 1000 }, ({ projectRoot, scoringManifest }) => {
+    writeFileSync(scoringManifest, '{"levels":[]}')
+    const result = run(['validate'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /dist\/maco\.json is reserved/)
+  })
+})
+
+test('setup keeps the scoring declaration', () => {
+  withProject({ name: 'test-game', maco: { key: 'test-game', scoring: { maxScore: 1000, order: 'asc' } } }, (projectRoot, manifest) => {
+    const result = run(['setup'], projectRoot)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.deepEqual(manifest().maco.scoring, { maxScore: 1000, order: 'asc' })
   })
 })

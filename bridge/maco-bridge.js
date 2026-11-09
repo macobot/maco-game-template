@@ -13,12 +13,16 @@
  *   var ticket = await MacoBridge.requestRoomTicket(roomCode)
  *   var matchTicket = await MacoBridge.requestMatchTicket()
  *   var voiceTicket = await MacoBridge.requestVoiceTicket(roomCode)
+ *   MacoBridge.submitScore(finalScore) // once per finished play
  *
  * `request*Ticket` deliberately only asks the embedding Maco page. It never
  * knows an API URL, cookie, private key or long-lived credential. The parent
  * must authorize the artifact's configured online game and reply with a
  * `online-ticket` message. A ticket is short-lived and is still validated by
  * the room/signalling service.
+ *
+ * `submitScore` only reports a finished play's score to the same host. The
+ * host decides whether and how it counts; the bridge holds no score authority.
  */
 (function () {
   'use strict';
@@ -83,6 +87,30 @@
     return 'maco-' + Date.now().toString(36) + '-' + sequence.toString(36) + '-' + random;
   }
 
+  function uuidV4() {
+    var cryptoApi = window.crypto;
+    if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+      try { return cryptoApi.randomUUID(); } catch (e) { /* insecure context: fall back below */ }
+    }
+    if (!cryptoApi || typeof cryptoApi.getRandomValues !== 'function') return undefined;
+    var bytes = new Uint8Array(16);
+    cryptoApi.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) hex += (bytes[i] + 0x100).toString(16).slice(1);
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+  }
+
+  function submitScore(score) {
+    if (refused || hostOrigin === undefined) return false;
+    if (!Number.isSafeInteger(score) || score <= 0) return false;
+    var id = uuidV4();
+    if (id === undefined) return false;
+    window.parent.postMessage({ protocol: PROTOCOL, type: 'score', payload: { id: id, score: score } }, hostOrigin);
+    return true;
+  }
+
   function ticketError(message) {
     var error = new Error(message);
     error.name = 'MacoBridgeTicketError';
@@ -139,7 +167,12 @@
     /** Joins the host-managed automatic queue for a two-player RTC game. */
     requestMatchTicket: function () { return requestTicket(null, 'game', true); },
     /** Gets a fresh, separate RTC ticket for optional room voice chat. */
-    requestVoiceTicket: function (room) { return requestTicket(room, 'voice', false); }
+    requestVoiceTicket: function (room) { return requestTicket(room, 'voice', false); },
+    /**
+     * Reports the score of one finished play to the Maco host. Call it once per play. Returns false, and sends
+     * nothing, before the host handshake or when `score` is not a positive safe integer.
+     */
+    submitScore: submitScore
   };
 
   window.addEventListener('message', function (event) {

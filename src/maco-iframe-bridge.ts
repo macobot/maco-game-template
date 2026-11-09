@@ -1,11 +1,23 @@
-// Vendored verbatim from minigames `scripts/maco-iframe-bridge.ts`; protocol `maco-game/v1`.
-// Keep it identical to that file, which follows the host in maco-games `domains/gamification/games/maco-game-bridge.ts`.
+// Vendored from minigames `scripts/maco-iframe-bridge.ts`; protocol `maco-game/v1`. Apart from `submitScore`, keep it
+// identical to that file, which follows the host in maco-games `domains/gamification/games/maco-game-bridge.ts`.
 export const MACO_GAME_PROTOCOL = 'maco-game/v1'
 
 const MACOGAME_DOMAIN = __MACOGAME_DOMAIN__
 const IS_DEVELOPMENT = import.meta.env.DEV
 
 type GameMount = (container: HTMLElement, options?: { lang?: string }) => { destroy(): void }
+
+/** The game-facing API, also published as `window.MacoBridge` for engine code that does not import this module. */
+export interface MacoBridgeApi {
+  readonly protocol: typeof MACO_GAME_PROTOCOL
+  submitScore(score: number): boolean
+}
+
+declare global {
+  interface Window {
+    MacoBridge?: Partial<MacoBridgeApi>
+  }
+}
 
 interface BridgeMessage {
   protocol: typeof MACO_GAME_PROTOCOL
@@ -66,6 +78,42 @@ function isFramedByForeignPage() {
 
 export const MACO_GAMES_URL = `${MACOGAME_DOMAIN}/`
 
+/** The origin of the Maco host that completed the handshake with the mounted game, if any. */
+let scoreHostOrigin: string | undefined
+
+function uuidV4(): string | undefined {
+  const cryptoApi = globalThis.crypto as Crypto | undefined
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    try {
+      return cryptoApi.randomUUID()
+    } catch {
+      // Not a secure context: fall back to getRandomValues below.
+    }
+  }
+  if (typeof cryptoApi?.getRandomValues !== 'function') return undefined
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+/**
+ * Reports the score of one finished play to the Maco host that completed the handshake. Call it once per play.
+ * Returns `false`, and sends nothing, before the handshake or when `score` is not a positive safe integer. The host
+ * decides whether and how the score counts; this bridge holds no score authority.
+ */
+export function submitScore(score: number): boolean {
+  if (scoreHostOrigin === undefined) return false
+  if (!Number.isSafeInteger(score) || score <= 0) return false
+  const id = uuidV4()
+  if (id === undefined) return false
+  window.parent.postMessage({ protocol: MACO_GAME_PROTOCOL, type: 'score', payload: { id, score } }, scoreHostOrigin)
+  return true
+}
+
+export const MacoBridge: MacoBridgeApi = { protocol: MACO_GAME_PROTOCOL, submitScore }
+
 /** Replaces the page with a link to Maco Games when the artefact is opened on its own, outside the host's iframe. */
 export function showPlayOnMaco(container: HTMLElement) {
   const notice = document.createElement('main')
@@ -87,6 +135,9 @@ export function showPlayOnMaco(container: HTMLElement) {
  * instead of the game. Do not put credentials or score-authority in this bridge.
  */
 export function mountMacoIframeGame(mountGame: GameMount) {
+  scoreHostOrigin = undefined
+  // Keep a `window.MacoBridge` that another bridge on the page published first.
+  window.MacoBridge ??= MacoBridge
   if (window.parent === window) {
     // A published build plays only inside Maco Games; `vite dev` still mounts it standalone for development.
     if ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) mountGame(document.body)
@@ -112,6 +163,7 @@ export function mountMacoIframeGame(mountGame: GameMount) {
     if (!isMacoHostOrigin(event.origin)) {
       // A page outside Maco speaking the protocol: a re-hosted copy. It never gets the game.
       window.removeEventListener('message', onMessage)
+      scoreHostOrigin = undefined
       mountedGame?.destroy()
       mountedGame = undefined
       showPlayOnMaco(document.body)
@@ -121,6 +173,7 @@ export function mountMacoIframeGame(mountGame: GameMount) {
     if (event.data.type === 'host-ready') {
       hostOrigin ??= event.origin
       if (hostOrigin !== event.origin) return
+      scoreHostOrigin = hostOrigin
       window.parent.postMessage({ protocol: MACO_GAME_PROTOCOL, type: 'ready' }, hostOrigin)
       return
     }
