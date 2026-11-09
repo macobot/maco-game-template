@@ -196,21 +196,29 @@ function isCliScoringManifest(text) {
     && text === scoringManifestText(parsed.scoring)
 }
 
+function reservedScoringManifestError(name) {
+  return new ArtifactCheckError(`dist/${name} is reserved for the scoring declaration the CLI writes to dist/${SCORING_MANIFEST_FILE} from package.json "maco.scoring"; rename your file`)
+}
+
 /**
  * Reads `dist/maco.json` and returns its text, `undefined` when there is none, and throws when the file is not one
- * the CLI wrote: the CLI owns that zip-root name for the scoring declaration.
+ * the CLI wrote: the CLI owns that zip-root name for the scoring declaration. A name that differs only by case
+ * (`Maco.json`) is refused too, because a case-insensitive disk would read it as `maco.json` while the zip keeps
+ * the other case and the server never sees the scoring.
  */
 async function readOwnedScoringManifest(distDir) {
-  const manifestPath = path.join(distDir, SCORING_MANIFEST_FILE)
-  const entry = await lstat(manifestPath).catch((error) => {
-    if (error.code === 'ENOENT') return undefined
+  const entries = await readdir(distDir).catch((error) => {
+    if (error.code === 'ENOENT') return []
     throw error
   })
-  if (entry === undefined) return undefined
+  const variant = entries.find(name => name !== SCORING_MANIFEST_FILE && name.normalize('NFC').toLowerCase() === SCORING_MANIFEST_FILE)
+  if (variant !== undefined) throw reservedScoringManifestError(variant)
+  if (!entries.includes(SCORING_MANIFEST_FILE)) return undefined
+
+  const manifestPath = path.join(distDir, SCORING_MANIFEST_FILE)
+  const entry = await lstat(manifestPath)
   const text = entry.isFile() ? await readFile(manifestPath, 'utf8') : undefined
-  if (text === undefined || !isCliScoringManifest(text)) {
-    throw new ArtifactCheckError(`dist/${SCORING_MANIFEST_FILE} is reserved for the scoring declaration the CLI writes from package.json "maco.scoring"; rename your file`)
-  }
+  if (text === undefined || !isCliScoringManifest(text)) throw reservedScoringManifestError(SCORING_MANIFEST_FILE)
   return text
 }
 
@@ -378,8 +386,11 @@ export async function writeArtifactZip(files, outFile) {
 }
 
 export async function validateProject(root) {
-  const { key, version, scoring } = await readProjectManifest(root)
+  return checkProjectArtifact(root, await readProjectManifest(root))
+}
 
+/** Checks `dist/` against the rules the server enforces, for an already validated `package.json`. */
+async function checkProjectArtifact(root, { key, version, scoring }) {
   const distDir = path.join(root, 'dist')
   const { files, totalBytes } = await collectArtifactFiles(distDir)
   await readOwnedScoringManifest(distDir)
@@ -392,10 +403,12 @@ export async function validateProject(root) {
 }
 
 export async function zipProject(root) {
+  // First, so an invalid key, version or scoring leaves dist/ untouched.
+  const project = await readProjectManifest(root)
   const bridgeAdded = await ensureArtifactBridge(root)
-  // Before validating, so dist/maco.json is checked and packed with the rest of dist/.
-  const scoring = await syncScoringManifest(root, (await readProjectManifest(root)).scoring)
-  const { key, version, files, totalBytes } = await validateProject(root)
+  // Before checking dist/, so dist/maco.json is checked and packed with the rest of it.
+  const scoring = await syncScoringManifest(root, project.scoring)
+  const { key, version, files, totalBytes } = await checkProjectArtifact(root, project)
   const outFile = path.join(root, 'maco-upload', `${key}-${version}.zip`)
   const zipBytes = await writeArtifactZip(files, outFile)
 

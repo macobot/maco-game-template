@@ -126,7 +126,7 @@ function onGameOver(finalScore: number) {
 ```js
 // Unity, Godot, HTML thuần: bridge cổ điển đặt sẵn window.MacoBridge
 function onGameOver(finalScore) {
-  if (window.MacoBridge && window.MacoBridge.submitScore) window.MacoBridge.submitScore(Math.round(finalScore))
+  window.MacoBridge?.submitScore?.(Math.round(finalScore))
 }
 ```
 
@@ -147,7 +147,7 @@ Bridge không chứa credential hay quyền quyết định điểm; Maco quyế
 A game can report the score of each finished play to Maco. It needs `@macobot/maco-cli` 0.2.9 or later and two steps.
 
 1. Declare `"scoring": { "maxScore": 1000, "order": "desc" }` inside `maco` in `package.json`. `maxScore` is an integer from 1 to 1,000,000,000, the highest score a legitimate play can reach. `order` is `"desc"` (higher is better, the default when omitted) or `"asc"` (lower is better, such as a finishing time). No other keys are allowed. `maco validate` and `maco zip` reject an invalid declaration. `maco zip` writes `dist/maco.json` (for example `{"scoring":{"maxScore":1000,"order":"desc"}}`, with `order` always explicit) so it lands at the zip root. Without `scoring`, no file is written and a `maco.json` the CLI wrote earlier is removed. The CLI owns the name `dist/maco.json`: `maco zip` stops with an error when the build already has a different `maco.json`.
-2. Call `submitScore(score)` once when a play ends, as in the examples above: `import { submitScore } from './maco-iframe-bridge'` in the Vite template, or `window.MacoBridge.submitScore(score)` with the classic bridge. Both bridges publish `window.MacoBridge`.
+2. Call `submitScore(score)` once when a play ends, as in the examples above: `import { submitScore } from './maco-iframe-bridge'` in the Vite template, or `window.MacoBridge?.submitScore?.(Math.round(finalScore))` with the classic bridge. Both bridges publish `window.MacoBridge`.
 
 `submitScore` returns `false` and sends nothing before the Maco handshake completes (for example in a standalone `pnpm dev`) or when `score` is not a positive safe integer. Otherwise it posts `{ protocol: 'maco-game/v1', type: 'score', payload: { id, score } }` with a fresh UUID v4 `id` to the handshaken Maco page only, and returns `true`. The bridge holds no credentials or score authority; Maco decides whether a score counts. The CLI adds the classic bridge only to builds without the `maco-game/v1` string, so a game that embeds an older copy of `src/maco-iframe-bridge.ts` must copy the new one from this template.
 
@@ -182,7 +182,7 @@ MacoBridge.on('input', (input) => applyHostInput(input))
 const ticket = await MacoBridge.requestRoomTicket(roomCode) // `null` để tạo room
 const voiceTicket = await MacoBridge.requestVoiceTicket(roomCode)
 
-MacoBridge.submitScore(finalScore) // một lần khi lượt chơi kết thúc, xem "Báo điểm (scoring)"
+window.MacoBridge?.submitScore?.(Math.round(finalScore)) // một lần khi lượt chơi kết thúc, xem "Báo điểm (scoring)"
 ```
 
 `requestRoomTicket` và `requestVoiceTicket` chỉ gửi `postMessage` tới parent Maco đã hoàn tất handshake. Bridge không chứa API URL, cookie, token ký hay secret. Parent cần trả lời theo contract sau (cũng kiểm `origin` và đúng `iframe.contentWindow`):

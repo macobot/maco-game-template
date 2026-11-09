@@ -1,5 +1,9 @@
-// Vendored from minigames `scripts/maco-iframe-bridge.ts`; protocol `maco-game/v1`. Apart from `submitScore`, keep it
-// identical to that file, which follows the host in maco-games `domains/gamification/games/maco-game-bridge.ts`.
+// Vendored from minigames `scripts/maco-iframe-bridge.ts`; protocol `maco-game/v1`. Keep it identical to that file, which
+// follows the host in maco-games `domains/gamification/games/maco-game-bridge.ts`, except for these template-only
+// parts, which serve engine code that cannot import this module; keep them when re-copying:
+// - the `MacoBridgeApi` interface, the `MacoBridge` export and the global `Window.MacoBridge` declaration;
+// - `window.MacoBridge ??= MacoBridge` in `mountMacoIframeGame`;
+// - the `scoreHostOrigin` resets at the start of `mountMacoIframeGame` and when a foreign page is refused.
 export const MACO_GAME_PROTOCOL = 'maco-game/v1'
 
 const MACOGAME_DOMAIN = __MACOGAME_DOMAIN__

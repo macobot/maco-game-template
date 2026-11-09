@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -492,12 +492,91 @@ test('zip refuses a dist/maco.json the CLI did not write and leaves it in place'
 
 test('zip refuses an invalid scoring declaration before writing anything', () => {
   withScoringProject({ maxScore: 0 }, ({ projectRoot, scoringManifest, zipFile }) => {
+    const indexHtml = path.join(projectRoot, 'dist', 'index.html')
+    const before = readFileSync(indexHtml, 'utf8')
+
     const result = run(['zip'], projectRoot)
 
     assert.equal(result.status, 1)
     assert.match(result.stderr, /maco:zip: package\.json "maco\.scoring\.maxScore" must be an integer from 1 to 1000000000/)
     assert.equal(existsSync(scoringManifest), false)
+    assert.equal(existsSync(path.join(projectRoot, 'dist', 'maco-bridge.js')), false)
+    assert.equal(readFileSync(indexHtml, 'utf8'), before)
     assert.equal(existsSync(zipFile), false)
+  })
+})
+
+test('zip refuses an invalid game key before touching dist/', () => {
+  withProject({ name: 'test-game', version: '1.2.3', maco: { key: 'api', scoring: { maxScore: 1000 } } }, (projectRoot) => {
+    mkdirSync(path.join(projectRoot, 'dist'))
+    writeFileSync(path.join(projectRoot, 'dist', 'index.html'), '<p>game</p>')
+
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /game key "api" is reserved/)
+    assert.deepEqual(readdirSync(path.join(projectRoot, 'dist')), ['index.html'])
+    assert.equal(readFileSync(path.join(projectRoot, 'dist', 'index.html'), 'utf8'), '<p>game</p>')
+  })
+})
+
+test('zip and validate refuse a maco.json that differs only by letter case', () => {
+  for (const scoring of [{ maxScore: 1000 }, undefined]) {
+    withScoringProject(scoring, ({ projectRoot, zipFile }) => {
+      const variant = path.join(projectRoot, 'dist', 'Maco.json')
+      writeFileSync(variant, '{"scoring":{"maxScore":1000,"order":"desc"}}')
+
+      for (const action of ['zip', 'validate']) {
+        const result = run([action], projectRoot)
+
+        assert.equal(result.status, 1, action)
+        assert.match(result.stderr, /dist\/Maco\.json is reserved for the scoring declaration the CLI writes to dist\/maco\.json/)
+      }
+      // readdir, not existsSync: a case-insensitive disk would report `maco.json` for `Maco.json`.
+      assert.equal(readdirSync(path.join(projectRoot, 'dist')).includes('maco.json'), false)
+      assert.equal(readFileSync(variant, 'utf8'), '{"scoring":{"maxScore":1000,"order":"desc"}}')
+      assert.equal(existsSync(zipFile), false)
+    })
+  }
+})
+
+test('zip refuses a dist/maco.json directory', () => {
+  withScoringProject({ maxScore: 1000 }, ({ projectRoot, scoringManifest, zipFile }) => {
+    mkdirSync(scoringManifest)
+
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /dist\/maco\.json is reserved/)
+    assert.equal(statSync(scoringManifest).isDirectory(), true)
+    assert.equal(existsSync(zipFile), false)
+  })
+})
+
+test('zip refuses a dist/maco.json symlink and leaves it in place', { skip: process.platform === 'win32' && 'creating a symlink needs extra rights on Windows' }, () => {
+  withScoringProject({ maxScore: 1000 }, ({ projectRoot, scoringManifest, zipFile }) => {
+    symlinkSync('index.html', scoringManifest)
+
+    const result = run(['zip'], projectRoot)
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /maco\.json is a symlink; symlinks are not allowed/)
+    assert.equal(lstatSync(scoringManifest).isSymbolicLink(), true)
+    assert.equal(existsSync(zipFile), false)
+  })
+})
+
+test('zip leaves an up-to-date dist/maco.json untouched', () => {
+  withScoringProject({ maxScore: 1000, order: 'asc' }, ({ projectRoot, scoringManifest }) => {
+    assert.equal(run(['zip'], projectRoot).status, 0)
+    const past = new Date('2020-01-01T00:00:00Z')
+    utimesSync(scoringManifest, past, past)
+
+    const second = run(['zip'], projectRoot)
+
+    assert.equal(second.status, 0, second.stderr)
+    assert.equal(statSync(scoringManifest).mtimeMs, past.getTime())
+    assert.equal(readFileSync(scoringManifest, 'utf8'), '{"scoring":{"maxScore":1000,"order":"asc"}}')
   })
 })
 
