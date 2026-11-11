@@ -1,6 +1,6 @@
 {
   "name": "@macobot/maco-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "CLI and browser SDK for validating, packaging and integrating Maco iframe games.",
   "keywords": [
     "maco",
