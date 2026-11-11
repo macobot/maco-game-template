@@ -91,9 +91,42 @@ Mỗi version là bất biến, nhưng bạn không cần tự tăng `version` c
 
 Chi tiết về giới hạn, đuôi file được phép, version và ghi chú cho từng engine: [docs/UPLOADING.md](docs/UPLOADING.md). Hướng dẫn đầy đủ trên Maco: [Cách đưa game lên Maco](https://macogame.com/huong-dan/dua-game-len-maco).
 
+## Dùng SDK trong game Vite/TypeScript
+
+`@macobot/maco-cli` có browser entry là `@macobot/maco-cli/sdk`. SDK được bundle cùng game, nên cài dưới dạng dev dependency là đủ:
+
+```bash
+pnpm add -D @macobot/maco-cli
+```
+
+Khai báo `maco.scoring` trong `package.json`, rồi mount game và báo đúng **một** điểm nguyên dương khi lượt chơi kết thúc:
+
+```ts
+import { mountMacoIframeGame, submitScore, type GameMount } from '@macobot/maco-cli/sdk'
+
+const mountGame: GameMount = (container, { lang } = {}) => {
+  // Tạo canvas/game mới trong container; destroy phải dọn timer, listener và canvas.
+  return { destroy() {} }
+}
+
+mountMacoIframeGame(mountGame, {
+  // Chỉ bật trong source game; bản publish phải giữ hai giá trị này là false.
+  allowLocalhost: import.meta.env.DEV,
+  allowStandalone: import.meta.env.DEV,
+})
+
+function onFinished(finalScore: number) {
+  submitScore(finalScore)
+}
+```
+
+`submitScore` (hay alias `reportScore`) trả về `true` khi message đã được gửi tới host sau handshake; đó **không** phải xác nhận server đã lưu lượt hay cộng XP. Server Maco mới kiểm tra `maxScore`, chống gửi trùng, quota và XP. SDK không chứa công thức điểm riêng của game: hãy giữ công thức đó cạnh luật game, ví dụ `matchScore(result)` của Shuttle Blitz.
+
+SDK ESM dành cho game có bundler. Unity, Godot và HTML thuần tiếp tục dùng bridge cổ điển mà `maco zip` thêm vào artifact khi cần.
+
 ## Báo điểm (scoring)
 
-Game có thể gửi điểm của mỗi lượt chơi cho Maco. Cần `@macobot/maco-cli` 0.2.9 trở lên (`pnpm up -D @macobot/maco-cli`) và hai bước.
+Game có thể gửi điểm của mỗi lượt chơi cho Maco. Cần `@macobot/maco-cli` 0.3.0 trở lên (`pnpm up -D @macobot/maco-cli`) và hai bước.
 
 **1. Khai báo trong `package.json`:**
 
@@ -115,8 +148,8 @@ Game có thể gửi điểm của mỗi lượt chơi cho Maco. Cần `@macobot
 **2. Gọi `submitScore(score)` một lần khi một lượt chơi kết thúc:**
 
 ```ts
-// Game Vite dùng bridge của template
-import { submitScore } from './maco-iframe-bridge'
+// Game Vite/TypeScript dùng SDK đã cài
+import { submitScore } from '@macobot/maco-cli/sdk'
 
 function onGameOver(finalScore: number) {
   submitScore(Math.round(finalScore))
@@ -140,16 +173,16 @@ Bridge Vite cũng đặt `window.MacoBridge`, nên code engine không import đ�
 
 Bridge không chứa credential hay quyền quyết định điểm; Maco quyết định điểm có được tính hay không.
 
-> CLI chỉ thêm bridge cổ điển vào bản build chưa có chuỗi `maco-game/v1`. Game đã nhúng một bản `src/maco-iframe-bridge.ts` cũ phải chép bản mới từ template để có `submitScore`.
+> CLI chỉ thêm bridge cổ điển vào bản build chưa có chuỗi `maco-game/v1`. Game dùng SDK đã bundle bridge này; game dùng source bridge cũ nên nâng lên SDK thay vì chép file bridge.
 
 ### Scoring (English)
 
-A game can report the score of each finished play to Maco. It needs `@macobot/maco-cli` 0.2.9 or later and two steps.
+A game can report the score of each finished play to Maco. It needs `@macobot/maco-cli` 0.3.0 or later and two steps.
 
 1. Declare `"scoring": { "maxScore": 1000, "order": "desc" }` inside `maco` in `package.json`. `maxScore` is an integer from 1 to 1,000,000,000, the highest score a legitimate play can reach. `order` is `"desc"` (higher is better, the default when omitted) or `"asc"` (lower is better, such as a finishing time). No other keys are allowed. `maco validate` and `maco zip` reject an invalid declaration. `maco zip` writes `dist/maco.json` (for example `{"scoring":{"maxScore":1000,"order":"desc"}}`, with `order` always explicit) so it lands at the zip root. Without `scoring`, no file is written and a `maco.json` the CLI wrote earlier is removed. The CLI owns the name `dist/maco.json`: `maco zip` stops with an error when the build already has a different `maco.json`.
-2. Call `submitScore(score)` once when a play ends, as in the examples above: `import { submitScore } from './maco-iframe-bridge'` in the Vite template, or `window.MacoBridge?.submitScore?.(Math.round(finalScore))` with the classic bridge. Both bridges publish `window.MacoBridge`.
+2. Call `submitScore(score)` once when a play ends, as in the examples above: `import { submitScore } from '@macobot/maco-cli/sdk'` in a Vite/TypeScript game, or `window.MacoBridge?.submitScore?.(Math.round(finalScore))` with the classic bridge. Both bridges publish `window.MacoBridge`.
 
-`submitScore` returns `false` and sends nothing before the Maco handshake completes (for example in a standalone `pnpm dev`) or when `score` is not a positive safe integer. Otherwise it posts `{ protocol: 'maco-game/v1', type: 'score', payload: { id, score } }` with a fresh UUID v4 `id` to the handshaken Maco page only, and returns `true`. The bridge holds no credentials or score authority; Maco decides whether a score counts. The CLI adds the classic bridge only to builds without the `maco-game/v1` string, so a game that embeds an older copy of `src/maco-iframe-bridge.ts` must copy the new one from this template.
+`submitScore` returns `false` and sends nothing before the Maco handshake completes (or when `score` is not a positive safe integer). Otherwise it posts `{ protocol: 'maco-game/v1', type: 'score', payload: { id, score } }` with a fresh UUID v4 `id` to the handshaken Maco page only, and returns `true`. The bridge holds no credentials or score authority; Maco decides whether a score counts. The CLI adds the classic bridge only to builds without the `maco-game/v1` string; Vite/TypeScript games should use the SDK instead of copying a bridge file.
 
 ## Phát hành CLI (maintainers)
 

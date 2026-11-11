@@ -1,7 +1,7 @@
 {
   "name": "@macobot/maco-cli",
-  "version": "0.2.9",
-  "description": "CLI for validating and packaging Maco iframe game upload kits.",
+  "version": "0.3.0",
+  "description": "CLI and browser SDK for validating, packaging and integrating Maco iframe games.",
   "keywords": [
     "maco",
     "maco-games",
@@ -12,11 +12,20 @@
   "bin": {
     "maco": "bin/maco.mjs"
   },
+  "exports": {
+    "./sdk": {
+      "types": "./sdk-dist/index.d.ts",
+      "import": "./sdk-dist/index.js",
+      "default": "./sdk-dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "bin",
     "bridge/maco-bridge.js",
     "scripts/zip-maco.mjs",
     "scripts/handoff-maco.mjs",
+    "sdk-dist",
     "README.md"
   ],
   "engines": {
@@ -41,6 +50,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src scripts",
+    "sdk:build": "vite build --config vite.sdk.config.ts && tsc --project tsconfig.sdk.json",
     "maco:validate": "maco validate",
     "maco:zip": "maco zip",
     "maco:publish": "maco publish",
@@ -52,7 +62,7 @@
     "cli:test": "node scripts/run-cli-tests.mjs",
     "verify": "pnpm typecheck && pnpm test && pnpm cli:lint && pnpm cli:test",
     "version:patch": "pnpm version patch",
-    "prepack": "pnpm verify",
+    "prepack": "pnpm verify && pnpm sdk:build",
     "publish:cli": "pnpm run version:patch && pnpm verify && npm publish --access public && git push --follow-tags"
   },
   "dependencies": {
