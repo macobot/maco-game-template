@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Packs `dist/` into `maco-upload/<key>-<version>.zip` for the upload form at
-// https://macogame.com/developer/game-submissions, failing locally on every rule the server enforces.
+// https://macogame.com/nha-phat-trien/gui-game, failing locally on every rule the server enforces.
 import { Buffer } from 'node:buffer'
 import { createWriteStream } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
@@ -53,13 +53,16 @@ export class ArtifactCheckError extends Error {
   name = 'ArtifactCheckError'
 }
 
-/** Returns the configurable Maco submission form URL shown after creating an artifact. */
+/**
+ * Returns the configurable Maco submission form URL shown after creating an artifact. Maco's default locale is
+ * Vietnamese, whose form lives at `/nha-phat-trien/gui-game`; the English path only exists under `/en/`.
+ */
 export function submissionFormUrl(domain = process.env.MACOGAME_DOMAIN ?? DEFAULT_MACOGAME_DOMAIN) {
   try {
     const url = new URL(domain)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('unsupported protocol')
     if (url.pathname !== '/' || url.search || url.hash) throw new Error('must be an origin')
-    return new URL('/developer/game-submissions', url).toString()
+    return new URL('/nha-phat-trien/gui-game', url).toString()
   } catch {
     throw new ArtifactCheckError('MACOGAME_DOMAIN must be an HTTP(S) origin, for example https://macogame.com')
   }

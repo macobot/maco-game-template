@@ -167,7 +167,7 @@ test('zip loads MACOGAME_DOMAIN from the project .env for its upload instruction
     const result = run(['zip'], projectRoot)
 
     assert.equal(result.status, 0, result.stderr)
-    assert.match(result.stdout, /Upload it at http:\/\/localhost:8787\/developer\/game-submissions with:/)
+    assert.match(result.stdout, /Upload it at http:\/\/localhost:8787\/nha-phat-trien\/gui-game with:/)
   } finally {
     rmSync(projectRoot, { recursive: true, force: true })
   }
@@ -193,6 +193,8 @@ test('handoff reads the game metadata and prepares the submission form', () => {
     assert.match(result.stdout, /Version: 1\.2\.3/)
     assert.match(result.stdout, /README: README\.md/)
     const form = new URL(result.stdout.match(/Form: (.+)/)?.[1])
+    // Maco's default locale is Vietnamese; /developer/game-submissions is a 404 there.
+    assert.equal(form.pathname, '/nha-phat-trien/gui-game')
     assert.equal(form.searchParams.get('game_key'), 'test-game')
     assert.equal(form.searchParams.get('version'), '1.2.3')
     assert.equal(form.hash.startsWith('#readme='), true)
