@@ -28,7 +28,7 @@ pnpm maco:publish
 }
 ```
 
-Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck` và `test` nếu project có các script này (bỏ qua nếu không có), rồi `build` (bắt buộc), tạo ZIP, rồi đọc `maco.key`, `version` và `README.md` trong project game để mở form `/developer/game-submissions` với metadata đã điền sẵn. Nội dung README (lưu dạng UTF-8, form nhận tối đa 20.000 ký tự đầu) được truyền qua URL fragment `#readme=…`, để form frontend có thể đọc mà nội dung không đi theo HTTP request; vẫn chỉ ghi thông tin công khai, không chứa token hay thông tin nhạy cảm. Bộ kiểm tra, đóng gói và handoff được cài kèm trong `@macobot/maco-cli`; project game không cần có các script này.
+Sau đó dùng `pnpm maco:validate`, `pnpm maco:zip` hoặc `pnpm maco:publish`. `maco publish` chạy `typecheck` và `test` nếu project có các script này (bỏ qua nếu không có), rồi `build` (bắt buộc), tạo ZIP, rồi đọc `maco.key`, `version` và `README.md` trong project game để mở form `/nha-phat-trien/gui-game` với metadata đã điền sẵn. Nội dung README (lưu dạng UTF-8, form nhận tối đa 20.000 ký tự đầu) được truyền qua URL fragment `#readme=…`, để form frontend có thể đọc mà nội dung không đi theo HTTP request; vẫn chỉ ghi thông tin công khai, không chứa token hay thông tin nhạy cảm. Bộ kiểm tra, đóng gói và handoff được cài kèm trong `@macobot/maco-cli`; project game không cần có các script này.
 
 Với npm, dùng `npm i -D @macobot/maco-cli`, `npx maco setup`, và `npm run maco:publish`.
 
@@ -38,7 +38,7 @@ Template để làm một web game và đưa lên [Maco](https://macogame.com) d
 
 - `pnpm build` tạo bản build nhiều file trong `dist/`, với đường dẫn asset tương đối;
 - `pnpm maco:zip` kiểm tra bản build theo đúng quy tắc của Maco và đóng gói thành `maco-upload/<key>-<version>.zip`;
-- bạn upload file zip tại <https://macogame.com/developer/game-submissions>.
+- bạn upload file zip tại <https://macogame.com/nha-phat-trien/gui-game>.
 
 Bridge `maco-game/v1` đã có sẵn, nên Maco nhận ra game đã sẵn sàng và truyền ngôn ngữ của người chơi vào game.
 
@@ -85,7 +85,7 @@ pnpm maco:zip
 
 `pnpm maco:zip` dừng với lỗi nếu bản build vi phạm một quy tắc mà máy chủ Maco cũng kiểm tra: thiếu `index.html` ở gốc, đuôi file không được phép, symlink, quá 1.000 file, quá 150 MB sau giải nén hoặc zip quá 50 MB, game key hay version không hợp lệ. Khi thành công, lệnh in ra game key và version để nhập vào form upload.
 
-`pnpm maco:publish` chạy trọn luồng kiểm tra → build → zip, sau đó mở `/developer/game-submissions` với **game key**, **version** và nội dung **README.md** của project. Chọn file trong `maco-upload/` vừa được tạo rồi gửi form.
+`pnpm maco:publish` chạy trọn luồng kiểm tra → build → zip, sau đó mở `/nha-phat-trien/gui-game` với **game key**, **version** và nội dung **README.md** của project. Chọn file trong `maco-upload/` vừa được tạo rồi gửi form.
 
 Mỗi version là bất biến, nhưng bạn không cần tự tăng `version` cho mỗi lần upload. Nếu `maco-upload/<key>-<version>.zip` của version hiện tại đã có, `pnpm maco:publish` ghi version kế tiếp vào `package.json` trước khi build (`1.0.0` → `1.0.1`, `1.0.0-beta.1` → `1.0.0-beta.2`), rồi in ra để bạn commit. Muốn lên minor/major, đặt `version` mới bằng tay; version chưa có zip được giữ nguyên. `pnpm maco:zip` không bao giờ đổi version. Quản trị viên Maco xét duyệt từng version trước khi phát hành.
 
