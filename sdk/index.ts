@@ -17,6 +17,8 @@ export type GameMount = (container: HTMLElement, options?: { lang?: string }) =>
 export interface MacoBridgeApi {
   readonly protocol: typeof MACO_GAME_PROTOCOL
   submitScore(score: number): boolean
+  startRun(): void
+  completeStage(stage: number): Promise<StageResult>
 }
 
 /** Options belong to the game integration, never to the score authority on the Maco server. */
@@ -29,6 +31,8 @@ export interface MacoIframeGameOptions {
   allowLocalhost?: boolean
   /** Mount outside an iframe, for a local development page only. Keep false in a published build. */
   allowStandalone?: boolean
+  /** Explicit local-only mock. Never use for a published build. */
+  mockStages?: boolean
 }
 
 declare global {
@@ -115,7 +119,70 @@ export function submitScore(score: number): boolean {
 /** A semantic alias for code that describes the end of a play as reporting rather than submitting. */
 export const reportScore = submitScore
 
-export const MacoBridge: MacoBridgeApi = { protocol: MACO_GAME_PROTOCOL, submitScore }
+export interface StageResult { recorded: boolean, xpAwarded: number, mode: 'live' | 'mock' }
+
+let mockStages = false
+let stageRun: Promise<string> | undefined
+let stageQueue: Promise<void> = Promise.resolve()
+let stageIds = new Map<number, string>()
+const stagePending = new Map<string, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
+const STAGE_TIMEOUT_MS = 5000
+
+function stageRequest(type: string, id: string, fields: object): Promise<unknown> {
+  const origin = scoreHostOrigin
+  if (!origin) return Promise.reject(new Error('Maco host is unavailable'))
+  if (stagePending.has(id) || stagePending.size >= 8) return Promise.reject(new Error('Stage request is already pending'))
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { stagePending.delete(id); reject(new Error('Maco stage request timed out')) }, STAGE_TIMEOUT_MS)
+    stagePending.set(id, {
+      resolve: value => { clearTimeout(timer); resolve(value) },
+      reject: error => { clearTimeout(timer); reject(error) },
+    })
+    window.parent.postMessage({ protocol: MACO_GAME_PROTOCOL, type, payload: { ...fields, id } }, origin)
+  })
+}
+
+/** Begins a new run. The host issues its ID; the game never supplies reward values. */
+export function startRun(): void {
+  const id = uuidV4()
+  stageIds = new Map()
+  stageQueue = Promise.resolve()
+  if (!id) stageRun = Promise.reject(new Error('Secure random IDs are unavailable'))
+  else if (mockStages) stageRun = Promise.resolve(id)
+  else stageRun = stageRequest('stage-run-request', id, {}).then((data) => {
+    if (!data || typeof data !== 'object' || typeof (data as { runId?: unknown }).runId !== 'string') throw new Error('Invalid stage run')
+    return (data as { runId: string }).runId
+  })
+  void stageRun.catch(() => undefined)
+}
+
+/** Reports a stage in order. A repeated stage retains its request ID, including on timeout retry. */
+export function completeStage(stage: number): Promise<StageResult> {
+  const run = stageRun
+  if (!run || !Number.isSafeInteger(stage) || stage <= 0) return Promise.reject(new Error('Start a run and pass a positive stage number'))
+  const id = stageIds.get(stage) ?? uuidV4()
+  if (!id) return Promise.reject(new Error('Secure random IDs are unavailable'))
+  const previous = stageIds.has(stage)
+  stageIds.set(stage, id)
+  const result = stageQueue.then(async () => {
+    const runId = await run
+    if (mockStages) return { recorded: !previous, xpAwarded: 5, mode: 'mock' as const }
+    const attempt = () => stageRequest('stage-complete-request', id, { runId, stage })
+    let data: unknown
+    try { data = await attempt() } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'Maco stage request timed out') throw error
+      data = await attempt()
+    }
+    if (!data || typeof data !== 'object') throw new Error('Invalid stage result')
+    const value = data as Partial<StageResult>
+    if (typeof value.recorded !== 'boolean' || !Number.isSafeInteger(value.xpAwarded) || (value.xpAwarded ?? -1) < 0 || value.mode !== 'live') throw new Error('Invalid stage result')
+    return value as StageResult
+  })
+  stageQueue = result.then(() => undefined, () => undefined)
+  return result
+}
+
+export const MacoBridge: MacoBridgeApi = { protocol: MACO_GAME_PROTOCOL, submitScore, startRun, completeStage }
 
 /** Replaces the page with a Maco Games link when a published artefact is opened outside its host iframe. */
 export function showPlayOnMaco(container: HTMLElement, macoGamesUrl = MACO_GAMES_URL) {
@@ -142,6 +209,8 @@ export function mountMacoIframeGame(mountGame: GameMount, options: MacoIframeGam
   const allowLocalhost = options.allowLocalhost ?? false
   const allowStandalone = options.allowStandalone ?? false
   scoreHostOrigin = undefined
+  // A framed page can never select the mock.
+  mockStages = options.mockStages === true && allowStandalone && window.parent === window
   // Keep an API that an engine bridge published first.
   window.MacoBridge ??= MacoBridge
 
@@ -162,6 +231,17 @@ export function mountMacoIframeGame(mountGame: GameMount, options: MacoIframeGam
     mountedGame = mountGame(document.body, locale ? { lang: locale } : undefined)
   }
   const onMessage = (event: MessageEvent) => {
+    if (event.source === window.parent && event.origin === hostOrigin && event.data && typeof event.data === 'object'
+      && event.data.protocol === MACO_GAME_PROTOCOL && event.data.type === 'stage-response') {
+      const payload = event.data.payload as { id?: unknown, data?: unknown, error?: unknown } | undefined
+      if (!payload || typeof payload.id !== 'string') return
+      const pending = stagePending.get(payload.id)
+      if (!pending) return
+      stagePending.delete(payload.id)
+      if (payload.error) pending.reject(new Error('Maco stage request denied'))
+      else pending.resolve(payload.data)
+      return
+    }
     if (event.source !== window.parent || !isBridgeMessage(event.data)) return
     if (!isTrustedMacoHostOrigin(event.origin, hostOrigins, allowLocalhost)) {
       window.removeEventListener('message', onMessage)
